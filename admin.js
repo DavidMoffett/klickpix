@@ -1,103 +1,89 @@
-/* KLICKPIX ADMIN & UPLOAD ENGINE
-   File: admin.js
-   Status: 100% COMPLETE
-*/
-
 (function () {
-  "use strict";
+    "use strict";
+    const sb = supabase.createClient(window.KLICKPIX_CONFIG.SUPABASE_URL, window.KLICKPIX_CONFIG.SUPABASE_ANON_KEY);
 
-  const output = document.getElementById("adminGalleryList");
+    async function initAdmin() {
+        const { data: galleries } = await sb.from("pe_galleries").select("*").order("created_at", { ascending: false });
+        
+        // 1. Calculate Totals for Top Bar
+        const totals = galleries.reduce((acc, g) => {
+            acc.v += (g.visit_count || 0);
+            acc.s += (g.purchase_count || 0);
+            acc.r += parseFloat(g.total_revenue || 0);
+            return acc;
+        }, { v: 0, s: 0, r: 0 });
 
-  async function initAdmin() {
-    try {
-      if (!window.KLICKPIX_CONFIG) throw new Error("Config missing");
-      const { SUPABASE_URL, SUPABASE_ANON_KEY } = window.KLICKPIX_CONFIG;
-      const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        document.getElementById("totalVisits").innerText = totals.v;
+        document.getElementById("totalSales").innerText = totals.s;
+        document.getElementById("totalRevenue").innerText = `$${totals.r.toFixed(2)}`;
 
-      // 1. Fetch Galleries
-      const { data: galleries, error } = await sb
-        .from("pe_galleries")
-        .select("*")
-        .order("created_at", { ascending: false });
+        // 2. Render Gallery Cards
+        let html = "";
+        galleries.forEach(g => {
+            html += `
+            <div class="admin-card" style="background:white; padding:1.5rem; border-radius:12px; margin-bottom:1.5rem; border:1px solid #eee;">
+                <div style="display:flex; justify-content:space-between; border-bottom:1px solid #eee; padding-bottom:1rem; margin-bottom:1rem;">
+                    <div>
+                        <h2 style="font-family:'Syne'">${g.title}</h2>
+                        <small>Price: $${g.default_price} | Secret: ${g.secret_word}</small>
+                    </div>
+                    <div style="text-align:right;">
+                        <div>Visits: ${g.visit_count} | Revenue: $${g.total_revenue}</div>
+                        <a href="index.html?id=${g.id}" target="_blank" style="font-size:0.8rem; color:blue;">View Gallery</a>
+                    </div>
+                </div>
 
-      if (error) throw error;
-
-      if (!galleries || galleries.length === 0) {
-        output.innerHTML = "<p>No events found. Create one in SQL first.</p>";
-        return;
-      }
-
-      // 2. Render Management UI
-      let html = '<div style="display: flex; flex-direction: column; gap: 2rem;">';
-      
-      galleries.forEach(g => {
-        html += `
-          <div style="background:#fff; padding:2rem; border-radius:12px; border:1px solid #e5e7eb;">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
-                <h2 style="font-family:'Syne', sans-serif;">${g.title}</h2>
-                <span style="font-weight:bold; color:${g.is_live ? 'green' : 'red'}">${g.is_live ? 'LIVE' : 'DRAFT'}</span>
-            </div>
-            
-            <div style="background:#f9fafb; padding:1.5rem; border-radius:8px; border:2px dashed #d1d5db;">
-                <p style="margin-bottom:1rem; font-weight:bold;">Upload New Pix:</p>
-                <input type="file" id="file_${g.id}" accept="image/*" multiple style="margin-bottom:1rem;">
-                <button class="btn btn-brand" onclick="window.uploadPhotos('${g.id}')">Upload to Gallery</button>
-                <div id="status_${g.id}" style="margin-top:1rem; font-size:0.9rem;"></div>
-            </div>
-          </div>`;
-      });
-      output.innerHTML = html + '</div>';
-
-      // 3. The Upload Logic
-      window.uploadPhotos = async (galleryId) => {
-        const fileInput = document.getElementById(`file_${galleryId}`);
-        const status = document.getElementById(`status_${galleryId}`);
-        const files = fileInput.files;
-
-        if (files.length === 0) return alert("Select files first");
-
-        status.innerText = "Starting upload...";
-
-        for (const file of files) {
-          const fileName = `${galleryId}/${Date.now()}-${file.name}`;
-          
-          // A. Push to Storage Bucket
-          const { data: sData, error: sError } = await sb.storage
-            .from('photos')
-            .upload(fileName, file);
-
-          if (sError) {
-            status.innerText = `Error: ${sError.message}`;
-            continue;
-          }
-
-          // B. Get Public URL
-          const { data: { publicUrl } } = sb.storage.from('photos').getPublicUrl(fileName);
-
-          // C. Write to Database Table
-          const { error: dbError } = await sb.from('pe_photos').insert([{
-            gallery_id: galleryId,
-            title: file.name,
-            preview_url: publicUrl,
-            full_res_url: publicUrl, // For now, we use same URL for both
-            is_live: true
-          }]);
-
-          if (dbError) {
-            status.innerText = `DB Error: ${dbError.message}`;
-          } else {
-            status.innerHTML = `<span style="color:green;">Success: ${file.name} uploaded.</span>`;
-          }
-        }
-        // Refresh to show changes if needed
-        setTimeout(() => location.reload(), 1500);
-      };
-
-    } catch (e) {
-      console.error(e);
-      output.innerHTML = `<div style="color:red;">Admin Error: ${e.message}</div>`;
+                <div class="upload-zone" style="background:#f9fafb; padding:1rem; border-radius:8px;">
+                    <input type="file" id="file_${g.id}" multiple accept="image/*">
+                    <button class="btn btn-brand" onclick="uploadPhotos('${g.id}')">Upload Pix</button>
+                    <div id="progress_container_${g.id}" style="display:none; margin-top:10px; background:#eee; height:10px; border-radius:5px;">
+                        <div id="bar_${g.id}" style="background:var(--brand-red); width:0%; height:100%; border-radius:5px; transition:width 0.3s;"></div>
+                    </div>
+                    <div id="status_${g.id}" style="font-size:0.8rem; margin-top:5px;"></div>
+                </div>
+            </div>`;
+        });
+        document.getElementById("adminGalleryList").innerHTML = html;
     }
-  }
 
-  initAdmin();
+    // CREATE EVENT
+    window.createEvent = async () => {
+        const title = document.getElementById("newTitle").value;
+        const price = document.getElementById("newPrice").value || 15.00;
+        if(!title) return alert("Title required");
+
+        await sb.from("pe_galleries").insert([{ title, default_price: price, is_live: true }]);
+        location.reload();
+    };
+
+    // UPLOAD WITH PROGRESS BAR
+    window.uploadPhotos = async (gId) => {
+        const files = document.getElementById(`file_${gId}`).files;
+        const bar = document.getElementById(`bar_${gId}`);
+        const container = document.getElementById(`progress_container_${gId}`);
+        const status = document.getElementById(`status_${gId}`);
+
+        if(files.length === 0) return;
+        container.style.display = "block";
+
+        for(let i=0; i<files.length; i++) {
+            const file = files[i];
+            const fileName = `${gId}/${Date.now()}-${file.name}`;
+            
+            status.innerText = `Uploading ${i+1} of ${files.length}...`;
+            
+            const { data, error } = await sb.storage.from('photos').upload(fileName, file);
+            if(!error) {
+                const { data: { publicUrl } } = sb.storage.from('photos').getPublicUrl(fileName);
+                await sb.from('pe_photos').insert([{ gallery_id: gId, preview_url: publicUrl, full_res_url: publicUrl }]);
+            }
+
+            let percent = ((i + 1) / files.length) * 100;
+            bar.style.width = percent + "%";
+        }
+        status.innerText = "Upload Complete!";
+        setTimeout(() => location.reload(), 1500);
+    };
+
+    initAdmin();
 })();
