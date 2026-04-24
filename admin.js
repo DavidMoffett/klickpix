@@ -1,89 +1,100 @@
-(function () {
-    "use strict";
-    const sb = supabase.createClient(window.KLICKPIX_CONFIG.SUPABASE_URL, window.KLICKPIX_CONFIG.SUPABASE_ANON_KEY);
+/* KLICKPIX ADMIN - COMMAND CENTRE FIXED */
+const sb = supabase.createClient(window.KLICKPIX_CONFIG.SUPABASE_URL, window.KLICKPIX_CONFIG.SUPABASE_ANON_KEY);
 
-    async function initAdmin() {
-        const { data: galleries } = await sb.from("pe_galleries").select("*").order("created_at", { ascending: false });
-        
-        // 1. Calculate Totals for Top Bar
-        const totals = galleries.reduce((acc, g) => {
-            acc.v += (g.visit_count || 0);
-            acc.s += (g.purchase_count || 0);
-            acc.r += parseFloat(g.total_revenue || 0);
-            return acc;
-        }, { v: 0, s: 0, r: 0 });
+// 1. UNIQUE GLOBAL FUNCTION NAME
+window.handleCreateEvent = async function() {
+    console.log("Ignition: handleCreateEvent fired.");
+    
+    const titleEl = document.getElementById("newTitle");
+    const priceEl = document.getElementById("newPrice");
+    
+    const title = titleEl.value.trim();
+    const price = parseFloat(priceEl.value) || 15.00;
 
-        document.getElementById("totalVisits").innerText = totals.v;
-        document.getElementById("totalSales").innerText = totals.s;
-        document.getElementById("totalRevenue").innerText = `$${totals.r.toFixed(2)}`;
+    if (!title) return alert("Please enter an Event Name");
 
-        // 2. Render Gallery Cards
-        let html = "";
-        galleries.forEach(g => {
-            html += `
-            <div class="admin-card" style="background:white; padding:1.5rem; border-radius:12px; margin-bottom:1.5rem; border:1px solid #eee;">
-                <div style="display:flex; justify-content:space-between; border-bottom:1px solid #eee; padding-bottom:1rem; margin-bottom:1rem;">
-                    <div>
-                        <h2 style="font-family:'Syne'">${g.title}</h2>
-                        <small>Price: $${g.default_price} | Secret: ${g.secret_word}</small>
-                    </div>
-                    <div style="text-align:right;">
-                        <div>Visits: ${g.visit_count} | Revenue: $${g.total_revenue}</div>
-                        <a href="index.html?id=${g.id}" target="_blank" style="font-size:0.8rem; color:blue;">View Gallery</a>
-                    </div>
-                </div>
+    const { error } = await sb.from("pe_galleries").insert([{ 
+        title: title, 
+        default_price: price, 
+        is_live: true 
+    }]);
 
-                <div class="upload-zone" style="background:#f9fafb; padding:1rem; border-radius:8px;">
-                    <input type="file" id="file_${g.id}" multiple accept="image/*">
-                    <button class="btn btn-brand" onclick="uploadPhotos('${g.id}')">Upload Pix</button>
-                    <div id="progress_container_${g.id}" style="display:none; margin-top:10px; background:#eee; height:10px; border-radius:5px;">
-                        <div id="bar_${g.id}" style="background:var(--brand-red); width:0%; height:100%; border-radius:5px; transition:width 0.3s;"></div>
-                    </div>
-                    <div id="status_${g.id}" style="font-size:0.8rem; margin-top:5px;"></div>
-                </div>
-            </div>`;
-        });
-        document.getElementById("adminGalleryList").innerHTML = html;
+    if (error) {
+        console.error("Supabase Error:", error);
+        alert("Error: " + error.message);
+    } else {
+        console.log("Success: Event Created");
+        location.reload();
+    }
+};
+
+async function initAdmin() {
+    console.log("Loading Admin Data...");
+    const { data: galleries, error } = await sb.from("pe_galleries").select("*").order("created_at", { ascending: false });
+    
+    if(error) {
+        console.error("Fetch Error:", error);
+        return;
     }
 
-    // CREATE EVENT
-    window.createEvent = async () => {
-        const title = document.getElementById("newTitle").value;
-        const price = document.getElementById("newPrice").value || 15.00;
-        if(!title) return alert("Title required");
+    // Stats Math
+    const totals = galleries.reduce((acc, g) => {
+        acc.v += (g.visit_count || 0);
+        acc.s += (g.purchase_count || 0);
+        acc.r += parseFloat(g.total_revenue || 0);
+        return acc;
+    }, { v: 0, s: 0, r: 0 });
 
-        await sb.from("pe_galleries").insert([{ title, default_price: price, is_live: true }]);
-        location.reload();
-    };
+    document.getElementById("totalVisits").innerText = totals.v;
+    document.getElementById("totalSales").innerText = totals.s;
+    document.getElementById("totalRevenue").innerText = `$${totals.r.toFixed(2)}`;
 
-    // UPLOAD WITH PROGRESS BAR
-    window.uploadPhotos = async (gId) => {
-        const files = document.getElementById(`file_${gId}`).files;
-        const bar = document.getElementById(`bar_${gId}`);
-        const container = document.getElementById(`progress_container_${gId}`);
-        const status = document.getElementById(`status_${gId}`);
+    let html = "";
+    galleries.forEach(g => {
+        html += `
+        <div class="admin-card" style="background:white; padding:1.5rem; border-radius:12px; margin-bottom:1.5rem; border:1px solid #eee; color:#111;">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <div>
+                    <h2 style="font-family:'Syne'; margin:0;">${g.title}</h2>
+                    <small>Price: $${g.default_price} | Secret: ${g.secret_word}</small>
+                </div>
+                <div style="text-align:right;">
+                    <div style="font-weight:bold;">Visits: ${g.visit_count}</div>
+                    <a href="index.html?id=${g.id}" target="_blank" style="color:var(--brand-red); font-size:0.8rem;">View Gallery</a>
+                </div>
+            </div>
+            <hr style="margin:1rem 0; opacity:0.1;">
+            <input type="file" id="file_${g.id}" multiple style="margin-bottom:10px; display:block;">
+            <button class="btn btn-brand" onclick="window.uploadPhotos('${g.id}')">Upload Pix</button>
+            <div id="status_${g.id}" style="font-size:0.8rem; margin-top:5px; font-weight:bold;"></div>
+        </div>`;
+    });
+    document.getElementById("adminGalleryList").innerHTML = html || "<p>No events found.</p>";
+}
 
-        if(files.length === 0) return;
-        container.style.display = "block";
+window.uploadPhotos = async function(gId) {
+    const fileInput = document.getElementById(`file_${gId}`);
+    const files = fileInput.files;
+    const status = document.getElementById(`status_${gId}`);
 
-        for(let i=0; i<files.length; i++) {
-            const file = files[i];
-            const fileName = `${gId}/${Date.now()}-${file.name}`;
-            
-            status.innerText = `Uploading ${i+1} of ${files.length}...`;
-            
-            const { data, error } = await sb.storage.from('photos').upload(fileName, file);
-            if(!error) {
-                const { data: { publicUrl } } = sb.storage.from('photos').getPublicUrl(fileName);
-                await sb.from('pe_photos').insert([{ gallery_id: gId, preview_url: publicUrl, full_res_url: publicUrl }]);
-            }
-
-            let percent = ((i + 1) / files.length) * 100;
-            bar.style.width = percent + "%";
+    if(files.length === 0) return alert("Select files first");
+    
+    status.innerText = "Uploading...";
+    
+    for(let file of files) {
+        const fileName = `${gId}/${Date.now()}-${file.name}`;
+        const { error } = await sb.storage.from('photos').upload(fileName, file);
+        if(!error) {
+            const { data: { publicUrl } } = sb.storage.from('photos').getPublicUrl(fileName);
+            await sb.from('pe_photos').insert([{ 
+                gallery_id: gId, 
+                preview_url: publicUrl, 
+                full_res_url: publicUrl,
+                price: 15.00
+            }]);
         }
-        status.innerText = "Upload Complete!";
-        setTimeout(() => location.reload(), 1500);
-    };
+    }
+    location.reload();
+};
 
-    initAdmin();
-})();
+initAdmin();
