@@ -1,0 +1,98 @@
+/* KLICKPIX BRAND STYLESHEET
+   File: style.css
+   Status: 100% COMPLETE
+*/
+
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@700;800&display=swap');
+
+:root {
+    --brand-red: #e11d48;
+    --dark-bg: #111827;
+    --light-bg: #f9fafb;
+    --border: #e5e7eb;
+    --white: #ffffff;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+    background: var(--light-bg);
+    color: var(--dark-bg);
+    line-height: 1.5;
+}
+
+/* Header & Brand */
+.header {
+    background: var(--white);
+    border-bottom: 1px solid var(--border);
+    padding: 1.5rem;
+    text-align: center;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+
+.logo {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: 2.2rem;
+    color: var(--dark-bg);
+    text-transform: uppercase;
+    letter-spacing: -1px;
+}
+
+.logo span { color: var(--brand-red); }
+
+/* Main Container */
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 2rem 1rem;
+}
+
+/* Photo Grid - The Business End */
+.photo-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1.5rem;
+}
+
+.photo-card {
+    background: var(--white);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    transition: transform 0.2s ease;
+}
+
+.photo-card:hover { 
+    transform: translateY(-4px);
+}
+
+.photo-thumb {
+    width: 100%;
+    aspect-ratio: 3/2;
+    object-fit: cover;
+    display: block;
+    cursor: pointer;
+}
+
+/* Buttons */
+.btn {
+    padding: 0.75rem 1.5rem;
+    border-radius: 8px;
+    font-weight: 700;
+    cursor: pointer;
+    border: none;
+    transition: opacity 0.2s;
+    display: inline-block;
+}
+
+.btn-primary { background: var(--dark-bg); color: var(--white); }
+.btn-brand { background: var(--brand-red); color: var(--white); }
+
+/* Responsive UI */
+@media (max-width: 640px) {
+    .photo-grid { grid-template-columns: 1fr; }
+}
