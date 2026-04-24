@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KlickPix Admin | Dashboard</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body style="background: #f3f4f6;">
+
+    <header class="header">
+        <div class="logo">KLICK<span>PIX</span> ADMIN</div>
+    </header>
+
+    <main class="container">
+        <div class="admin-panel">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+                <h2 style="font-family: 'Syne', sans-serif; font-size: 1.8rem;">Event Manager</h2>
+                <button class="btn btn-primary" onclick="alert('Create Event Logic Next')">+ New Event</button>
+            </div>
+            
+            <div id="adminGalleryList">
+                <div style="opacity: 0.5;">Loading Secure Admin Data...</div>
+            </div>
+        </div>
+    </main>
+
+    <script src="data.js"></script>
+    <script src="admin.js"></script>
+</body>
+</html>
