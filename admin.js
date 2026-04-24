@@ -1,100 +1,80 @@
-/* KLICKPIX ADMIN - COMMAND CENTRE FIXED */
 const sb = supabase.createClient(window.KLICKPIX_CONFIG.SUPABASE_URL, window.KLICKPIX_CONFIG.SUPABASE_ANON_KEY);
+const cache = {};
 
-// 1. UNIQUE GLOBAL FUNCTION NAME
 window.handleCreateEvent = async function() {
-    console.log("Ignition: handleCreateEvent fired.");
-    
-    const titleEl = document.getElementById("newTitle");
-    const priceEl = document.getElementById("newPrice");
-    
-    const title = titleEl.value.trim();
-    const price = parseFloat(priceEl.value) || 15.00;
+    const title = document.getElementById("newTitle").value.trim();
+    const price = parseFloat(document.getElementById("newPrice").value) || 15.00;
+    if (!title) return;
+    await sb.from("pe_galleries").insert([{ title, default_price: price, is_live: true }]);
+    location.reload();
+};
 
-    if (!title) return alert("Please enter an Event Name");
-
-    const { error } = await sb.from("pe_galleries").insert([{ 
-        title: title, 
-        default_price: price, 
-        is_live: true 
-    }]);
-
-    if (error) {
-        console.error("Supabase Error:", error);
-        alert("Error: " + error.message);
-    } else {
-        console.log("Success: Event Created");
-        location.reload();
-    }
+window.deleteGallery = async function(id, title) {
+    if (!confirm(`Confirm: Delete "${title}" and all its photos?`)) return;
+    await sb.from("pe_photos").delete().eq("gallery_id", id);
+    await sb.from("pe_galleries").delete().eq("id", id);
+    location.reload();
 };
 
 async function initAdmin() {
-    console.log("Loading Admin Data...");
-    const { data: galleries, error } = await sb.from("pe_galleries").select("*").order("created_at", { ascending: false });
+    const { data: galleries } = await sb.from("pe_galleries").select("*").order("created_at", { ascending: false });
     
-    if(error) {
-        console.error("Fetch Error:", error);
-        return;
-    }
-
-    // Stats Math
-    const totals = galleries.reduce((acc, g) => {
+    const stats = galleries.reduce((acc, g) => {
         acc.v += (g.visit_count || 0);
-        acc.s += (g.purchase_count || 0);
         acc.r += parseFloat(g.total_revenue || 0);
         return acc;
-    }, { v: 0, s: 0, r: 0 });
+    }, { v: 0, r: 0 });
 
-    document.getElementById("totalVisits").innerText = totals.v;
-    document.getElementById("totalSales").innerText = totals.s;
-    document.getElementById("totalRevenue").innerText = `$${totals.r.toFixed(2)}`;
+    document.getElementById("totalVisits").innerText = stats.v;
+    document.getElementById("totalRevenue").innerText = `$${stats.r.toFixed(2)}`;
 
     let html = "";
     galleries.forEach(g => {
         html += `
-        <div class="admin-card" style="background:white; padding:1.5rem; border-radius:12px; margin-bottom:1.5rem; border:1px solid #eee; color:#111;">
+        <div class="admin-card" style="background:white; padding:2rem; border-radius:15px; margin-bottom:2rem; border:1px solid #eee;">
             <div style="display:flex; justify-content:space-between; align-items:center;">
                 <div>
                     <h2 style="font-family:'Syne'; margin:0;">${g.title}</h2>
-                    <small>Price: $${g.default_price} | Secret: ${g.secret_word}</small>
+                    <p style="color:#666; font-size:0.9rem; margin:5px 0;">Price: NZD $${g.default_price}</p>
                 </div>
                 <div style="text-align:right;">
-                    <div style="font-weight:bold;">Visits: ${g.visit_count}</div>
-                    <a href="index.html?id=${g.id}" target="_blank" style="color:var(--brand-red); font-size:0.8rem;">View Gallery</a>
+                    <div style="font-weight:bold; font-size:1.2rem;">$${g.total_revenue}</div>
+                    <a href="index.html?id=${g.id}" target="_blank" style="color:#e11d48; text-decoration:none; font-weight:bold; font-size:0.8rem;">VIEW GALLERY</a>
                 </div>
             </div>
-            <hr style="margin:1rem 0; opacity:0.1;">
-            <input type="file" id="file_${g.id}" multiple style="margin-bottom:10px; display:block;">
-            <button class="btn btn-brand" onclick="window.uploadPhotos('${g.id}')">Upload Pix</button>
-            <div id="status_${g.id}" style="font-size:0.8rem; margin-top:5px; font-weight:bold;"></div>
+            
+            <div style="margin-top:1.5rem; background:#f9fafb; padding:1.5rem; border-radius:10px;">
+                <input type="file" multiple onchange="window.cacheFiles(this, '${g.id}')" style="margin-bottom:10px;">
+                <button class="btn btn-brand" onclick="window.upload('${g.id}', ${g.default_price})">UPLOAD IMAGES</button>
+                <div id="status_${g.id}" style="margin-top:10px; font-size:0.8rem; font-weight:bold;"></div>
+            </div>
+
+            <button onclick="window.deleteGallery('${g.id}', '${g.title}')" style="margin-top:15px; background:none; border:none; color:#e11d48; cursor:pointer; font-size:0.7rem; font-weight:bold; text-transform:uppercase; letter-spacing:1px;">Delete Event</button>
         </div>`;
     });
-    document.getElementById("adminGalleryList").innerHTML = html || "<p>No events found.</p>";
+    document.getElementById("adminGalleryList").innerHTML = html;
 }
 
-window.uploadPhotos = async function(gId) {
-    const fileInput = document.getElementById(`file_${gId}`);
-    const files = fileInput.files;
-    const status = document.getElementById(`status_${gId}`);
+window.cacheFiles = (input, id) => {
+    cache[id] = input.files;
+    document.getElementById(`status_${id}`).innerText = `${input.files.length} images ready.`;
+};
 
-    if(files.length === 0) return alert("Select files first");
-    
-    status.innerText = "Uploading...";
-    
-    for(let file of files) {
-        const fileName = `${gId}/${Date.now()}-${file.name}`;
-        const { error } = await sb.storage.from('photos').upload(fileName, file);
-        if(!error) {
-            const { data: { publicUrl } } = sb.storage.from('photos').getPublicUrl(fileName);
-            await sb.from('pe_photos').insert([{ 
-                gallery_id: gId, 
-                preview_url: publicUrl, 
-                full_res_url: publicUrl,
-                price: 15.00
-            }]);
+window.upload = async function(id, price) {
+    const files = cache[id];
+    if (!files) return alert("Select files first");
+    const status = document.getElementById(`status_${id}`);
+    for (let file of files) {
+        const path = `${id}/${Date.now()}-${file.name}`;
+        status.innerText = `Syncing ${file.name}...`;
+        const { error } = await sb.storage.from('photos').upload(path, file);
+        if (!error) {
+            const { data: { publicUrl } } = sb.storage.from('photos').getPublicUrl(path);
+            await sb.from('pe_photos').insert([{ gallery_id: id, preview_url: publicUrl, full_res_url: publicUrl, price: price }]);
         }
     }
-    location.reload();
+    status.innerText = "Done!";
+    setTimeout(() => location.reload(), 800);
 };
 
 initAdmin();
