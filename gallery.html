@@ -4,46 +4,61 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>KlickPix | Gallery</title>
-    <link rel="stylesheet" href="style.css?v=9.0">
+    <link rel="stylesheet" href="style.css?v=10.1">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="data.js?v=9.0"></script>
+    <script src="data.js?v=10.1"></script>
     <script src="https://www.paypal.com/sdk/js?client-id=AXFu1IvLoy8r_Picp3ktJmf3arbfftfdL-vN8xp43FodnK6w7gnjqL_QZ6DwfgmryNfbv20QrDjpRFJf&currency=NZD"></script>
     <style>
         body { background: #0f172a; font-family: 'Syne', sans-serif; color: white; margin: 0; padding: 40px 20px; }
         .container { max-width: 1600px; margin: 0 auto; }
-        .gallery-header { margin-bottom: 60px; border-left: 4px solid #e11d48; padding-left: 20px; }
+        
+        /* Brand Header */
+        .gallery-header { margin-bottom: 60px; border-left: 4px solid #e11d48; padding-left: 20px; position: relative; }
         .gallery-header h1 { font-size: 2.8rem; letter-spacing: -2px; margin: 0; text-transform: uppercase; font-weight: 800; line-height: 1; }
         .back-link { color: #64748b; text-decoration: none; font-weight: 800; font-size: 0.7rem; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 15px; display: block; }
 
-        /* The Grid & Watermark Shield */
+        /* Floating Cart Tab */
+        #cart-status { 
+            position: fixed; top: 40px; right: 40px; background: #e11d48; 
+            padding: 15px 25px; border-radius: 12px; font-weight: 800; 
+            display: none; z-index: 1100; cursor: pointer; border: none;
+            box-shadow: 0 10px 25px rgba(225, 29, 72, 0.4);
+            animation: slideIn 0.3s ease-out;
+        }
+        @keyframes slideIn { from { transform: translateX(100px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+        /* Grid Logic */
         .photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
-        .photo-item { aspect-ratio: 1/1; border-radius: 4px; overflow: hidden; cursor: pointer; position: relative; background: #1e293b; }
-        .photo-item img { width: 100%; height: 100%; object-fit: cover; }
+        .photo-item { aspect-ratio: 1/1; border-radius: 4px; overflow: hidden; cursor: pointer; position: relative; background: #1e293b; transition: all 0.2s; }
+        .photo-item img { width: 100%; height: 100%; object-fit: cover; opacity: 0.9; }
         
+        /* The Selection Border */
+        .photo-item.selected { outline: 6px solid #e11d48; outline-offset: -6px; }
+        .select-indicator { 
+            position: absolute; top: 15px; right: 15px; width: 24px; height: 24px; 
+            background: rgba(0,0,0,0.5); border: 2px solid white; border-radius: 50%; z-index: 20;
+        }
+        .selected .select-indicator { background: #e11d48; }
+
+        /* Watermark */
         .watermark-overlay { 
             position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
             display: flex; flex-wrap: wrap; justify-content: center; align-content: center;
             pointer-events: none; overflow: hidden; z-index: 5;
         }
-        .wm-text { 
-            transform: rotate(-45deg); /* Direction */
-            white-space: nowrap; font-weight: 900; font-size: 1.5rem; 
-            padding: 20px; text-transform: uppercase; letter-spacing: 5px;
-        }
+        .wm-text { transform: rotate(-45deg); white-space: nowrap; font-weight: 900; font-size: 1.5rem; text-transform: uppercase; }
 
-        .buy-tab { position: absolute; bottom: 0; left: 0; right: 0; background: rgba(225, 29, 72, 0.95); color: white; padding: 15px; text-align: center; font-weight: 800; font-size: 0.7rem; transform: translateY(100%); transition: transform 0.3s; z-index: 10; }
-        .photo-item:hover .buy-tab { transform: translateY(0); }
-
-        /* Slideshow */
-        #preview-modal { display:none; position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(10, 15, 26, 0.98); z-index:1000; flex-direction: column; justify-content:center; align-items:center; }
-        .preview-stage { position: relative; width: 90%; max-height: 70vh; display: flex; justify-content: center; }
-        #full-img { max-width: 100%; max-height: 70vh; border-radius: 4px; border: 1px solid #334155; }
-        .nav-btn { position: absolute; top: 50%; transform: translateY(-50%); background: none; border: none; color: white; font-size: 4rem; cursor: pointer; opacity: 0.2; padding: 30px; }
-        .nav-btn:hover { opacity: 1; color: #e11d48; }
+        /* Checkout Modal */
+        #checkout-modal { display:none; position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(10, 15, 26, 0.98); z-index:2000; flex-direction: column; justify-content:center; align-items:center; }
+        .modal-box { background: #1e293b; padding: 40px; border-radius: 12px; width: 90%; max-width: 400px; text-align: center; border: 1px solid #334155; }
         .close-x { position: fixed; top: 30px; right: 40px; font-size: 2.5rem; cursor: pointer; color: #475569; }
     </style>
 </head>
 <body>
+
+<div id="cart-status" onclick="openCheckout()">
+    CHECKOUT <span id="cart-count">0</span> PHOTOS
+</div>
 
 <div class="container">
     <div class="gallery-header">
@@ -53,18 +68,11 @@
     <div id="photo-grid" class="photo-grid"></div>
 </div>
 
-<div id="preview-modal">
+<div id="checkout-modal">
     <span class="close-x" onclick="closeModal()">✕</span>
-    <div class="preview-stage">
-        <button class="nav-btn" style="left:0" onclick="changePhoto(-1)">‹</button>
-        <div style="position:relative;">
-            <img id="full-img" src="" oncontextmenu="return false;">
-            <div id="modal-wm" class="watermark-overlay"></div>
-        </div>
-        <button class="nav-btn" style="right:0" onclick="changePhoto(1)">›</button>
-    </div>
-    <div style="margin-top:25px; text-align:center; width:350px;">
-        <div id="price-tag" style="font-size:1.4rem; font-weight:800; margin-bottom:15px;"></div>
+    <div class="modal-box">
+        <h2 style="margin:0; letter-spacing:-1px;">ORDER SUMMARY</h2>
+        <p id="order-summary" style="color:#94a3b8; margin: 20px 0; font-weight: 600;"></p>
         <div id="paypal-container"></div>
     </div>
 </div>
@@ -73,58 +81,77 @@
     const sb = supabase.createClient(window.KLICKPIX_CONFIG.SUPABASE_URL, window.KLICKPIX_CONFIG.SUPABASE_ANON_KEY);
     const urlParams = new URLSearchParams(window.location.search);
     const gId = urlParams.get('id');
-    let photoData = [], currentIndex = 0, eventPrice = 15.00, wmHTML = '';
+    
+    let cart = [];
+    let photoData = [];
+    let unitPrice = 15.00;
+    let wmHTML = '';
 
     async function init() {
         const { data: g } = await sb.from('pe_galleries').select('*').eq('id', gId).single();
         if (!g) return;
-        document.getElementById('gallery-title').innerText = g.title;
-        eventPrice = g.default_price || 15.00;
         
-        // Build the Watermark repetitive string
+        document.getElementById('gallery-title').innerText = g.title;
+        unitPrice = g.default_price || 15.00;
+
+        // Build Watermark
         const label = g.watermark_text || 'KlickPix';
         const style = `color:${g.watermark_color || '#FFFFFF'}; opacity:${g.watermark_opacity || 0.3};`;
         wmHTML = `<div class="wm-text" style="${style}">${new Array(15).fill(label).join(' &nbsp; ')}</div>`.repeat(6);
 
         const { data: photos } = await sb.from('pe_photos').select('*').eq('gallery_id', gId);
         photoData = photos || [];
-        document.getElementById('photo-grid').innerHTML = photoData.map((p, i) => `
-            <div class="photo-item" onclick="openSlideshow(${i})">
+        
+        document.getElementById('photo-grid').innerHTML = photoData.map(p => `
+            <div class="photo-item" id="photo-${p.id}" onclick="toggleCart('${p.id}')">
                 <img src="${p.preview_url}" oncontextmenu="return false;">
                 <div class="watermark-overlay">${wmHTML}</div>
-                <div class="buy-tab">VIEW & BUY $${parseFloat(eventPrice).toFixed(2)}</div>
+                <div class="select-indicator"></div>
+                <div style="position:absolute; bottom:10px; left:10px; font-weight:800; font-size:0.7rem; z-index:10;">$${unitPrice}</div>
             </div>`).join('');
     }
 
-    function openSlideshow(i) {
-        currentIndex = i;
-        updatePreview();
-        document.getElementById('preview-modal').style.display = 'flex';
+    function toggleCart(id) {
+        const i = cart.indexOf(id);
+        if (i > -1) {
+            cart.splice(i, 1);
+            document.getElementById(`photo-${id}`).classList.remove('selected');
+        } else {
+            cart.push(id);
+            document.getElementById(`photo-${id}`).classList.add('selected');
+        }
+        
+        const count = cart.length;
+        document.getElementById('cart-count').innerText = count;
+        document.getElementById('cart-status').style.display = count > 0 ? 'block' : 'none';
     }
 
-    function updatePreview() {
-        const p = photoData[currentIndex];
-        document.getElementById('full-img').src = p.preview_url;
-        document.getElementById('modal-wm').innerHTML = wmHTML;
-        document.getElementById('price-tag').innerText = `$${parseFloat(eventPrice).toFixed(2)} NZD`;
+    function openCheckout() {
+        const total = (cart.length * unitPrice).toFixed(2);
+        document.getElementById('order-summary').innerText = `${cart.length} Photos Selected\nTotal: $${total} NZD`;
+        document.getElementById('checkout-modal').style.display = 'flex';
+        
         const con = document.getElementById('paypal-container');
         con.innerHTML = '';
+        
         paypal.Buttons({
             style: { layout: 'vertical', color: 'white', shape: 'rect' },
-            createOrder: (d, a) => a.order.create({ purchase_units: [{ amount: { currency_code: "NZD", value: eventPrice.toString() } }] }),
+            createOrder: (d, a) => a.order.create({
+                purchase_units: [{ amount: { currency_code: "NZD", value: total } }]
+            }),
             onApprove: async (d, a) => {
                 await a.order.capture();
-                con.innerHTML = `<a href="${p.full_res_url}" download target="_blank" style="display:block; background:white; color:#0f172a; padding:12px; border-radius:4px; text-decoration:none; font-weight:800;">DOWNLOAD NOW ↓</a>`;
+                const items = photoData.filter(p => cart.includes(p.id));
+                con.innerHTML = `
+                    <div style="background:#22c55e; padding:20px; border-radius:8px; text-align:left;">
+                        <h4 style="margin:0 0 10px 0;">PAYMENT SUCCESSFUL!</h4>
+                        ${items.map(p => `<a href="${p.full_res_url}" download style="display:block; color:white; font-size:0.8rem; margin-top:8px; text-decoration:underline;">Download Photo ↓</a>`).join('')}
+                    </div>`;
             }
         }).render('#paypal-container');
     }
 
-    function changePhoto(s) {
-        currentIndex = (currentIndex + s + photoData.length) % photoData.length;
-        updatePreview();
-    }
-
-    function closeModal() { document.getElementById('preview-modal').style.display = 'none'; }
+    function closeModal() { document.getElementById('checkout-modal').style.display = 'none'; }
     init();
 </script>
 </body>
