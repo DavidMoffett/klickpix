@@ -3,37 +3,137 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>KlickPix Admin | Command Centre</title>
-    <link rel="stylesheet" href="style.css">
+    <title>KlickPix Command Centre</title>
+    <link rel="stylesheet" href="style.css?v=5.0">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="data.js?v=5.0"></script>
+    <style>
+        body { background: #f1f5f9; font-family: 'Syne', sans-serif; color: #0f172a; margin: 0; padding: 40px 20px; }
+        .container { max-width: 1000px; margin: 0 auto; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 40px; }
+        .event-card { background: white; border-radius: 24px; padding: 30px; margin-bottom: 25px; border: 1px solid #e2e8f0; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.05); }
+        .btn-post { background: #0f172a; color: white; padding: 14px 28px; border-radius: 12px; font-weight: 800; cursor: pointer; border: none; text-transform: uppercase; display: inline-block; }
+        .btn-create { background: #e11d48; color: white; border: none; padding: 0 35px; border-radius: 12px; font-weight: 800; cursor: pointer; }
+        input[type="text"] { flex: 1; padding: 15px; border-radius: 12px; border: 2px solid #f1f5f9; font-family: inherit; font-weight: 600; outline: none; }
+        .progress-bar { height: 10px; background: #e2e8f0; border-radius: 5px; overflow: hidden; margin: 20px 0; display: none; }
+        .progress-fill { height: 100%; background: #22c55e; width: 0%; transition: width 0.3s; }
+        .status-msg { font-weight: 800; color: #e11d48; font-size: 0.9rem; }
+    </style>
 </head>
-<body style="background: #f3f4f6;">
+<body>
 
-    <header class="header">
-        <div class="logo">KLICK<span>PIX</span> ADMIN</div>
-    </header>
-
-    <div id="statsBar" style="background: #111827; color: white; padding: 1rem; display: flex; justify-content: space-around; font-size: 0.9rem; font-weight: bold; text-transform: uppercase; letter-spacing: 1px;">
-        <div>Total Visits: <span id="totalVisits">0</span></div>
-        <div>Total Sales: <span id="totalSales">0</span></div>
-        <div>Total Revenue: <span id="totalRevenue">$0.00</span></div>
+<div class="container">
+    <div class="header">
+        <h1 style="font-size: 3rem; letter-spacing: -3px; margin: 0;">COMMAND CENTRE</h1>
+        <button onclick="location.reload(true)" style="background:none; border:2px solid #0f172a; padding:10px 20px; border-radius:12px; font-weight:800; cursor:pointer;">FORCE REFRESH</button>
     </div>
 
-    <main class="container">
-        <section style="background: white; padding: 1.5rem; border-radius: 12px; margin-bottom: 2rem; border: 1px solid #e5e7eb;">
-            <h3 style="margin-bottom: 1rem; font-family: 'Syne';">Create New Event</h3>
-            <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
-                <input type="text" id="newTitle" placeholder="Event Name" style="padding: 0.5rem; flex: 1;">
-                <input type="number" id="newPrice" placeholder="Photo Price (NZD)" style="padding: 0.5rem; width: 140px;">
-                <button class="btn btn-primary" onclick="handleCreateEvent()">Create Event</button>
-            </div>
-        </section>
+    <div style="background:white; padding:30px; border-radius:24px; display:flex; gap:15px; margin-bottom:40px; border:1px solid #e2e8f0;">
+        <input type="text" id="gName" placeholder="Event Name (e.g. Waitaki Rugby)">
+        <button class="btn-create" onclick="makeGallery()">CREATE</button>
+    </div>
 
-        <div id="adminGalleryList">
-            </div>
-    </main>
+    <div id="event-list">Checking signal...</div>
+</div>
 
-    <script src="data.js"></script>
-    <script src="admin.js"></script>
+<script>
+    const sb = supabase.createClient(window.KLICKPIX_CONFIG.SUPABASE_URL, window.KLICKPIX_CONFIG.SUPABASE_ANON_KEY);
+
+    async function refreshUI() {
+        const { data: galleries } = await sb.from('pe_galleries').select('*').order('id', { ascending: false });
+        const list = document.getElementById('event-list');
+        if (!galleries) return;
+
+        let html = '';
+        for (const g of galleries) {
+            const { count } = await sb.from('pe_photos').select('*', { count: 'exact', head: true }).eq('gallery_id', g.id);
+            const liveColor = g.is_live ? '#22c55e' : '#ef4444';
+            const liveText = g.is_live ? 'LIVE' : 'DRAFT';
+
+            html += `
+                <div class="event-card">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <h2 style="margin:0; letter-spacing:-1px;">${g.title} (${count || 0} Photos)</h2>
+                        <div>
+                            <button onclick="toggleLive(${g.id}, ${g.is_live})" style="background:${liveColor}; color:white; border:none; padding:8px 16px; border-radius:8px; font-weight:800; cursor:pointer;">${liveText}</button>
+                            <button onclick="del(${g.id})" style="background:none; border:none; color:#cbd5e1; cursor:pointer; font-weight:800; margin-left:15px;">DELETE</button>
+                        </div>
+                    </div>
+
+                    <div id="status-${g.id}" class="status-msg" style="margin-top:20px;"></div>
+                    <div class="progress-bar" id="pbar-${g.id}"><div class="progress-fill" id="pfill-${g.id}"></div></div>
+
+                    <div style="margin-top:20px; display:flex; gap:10px; align-items:center;">
+                        <input type="file" id="files-${g.id}" multiple style="display:none;" onchange="bulkUpload(${g.id})">
+                        <label for="files-${g.id}" class="btn-post">ADD PHOTOS & DEPLOY</label>
+                    </div>
+                </div>`;
+        }
+        list.innerHTML = html;
+    }
+
+    async function makeGallery() {
+        const val = document.getElementById('gName').value;
+        if (!val) return;
+        await sb.from('pe_galleries').insert([{ title: val, is_live: false }]);
+        document.getElementById('gName').value = '';
+        refreshUI();
+    }
+
+    async function bulkUpload(gId) {
+        const fileInput = document.getElementById(`files-${gId}`);
+        const files = Array.from(fileInput.files);
+        const stat = document.getElementById(`status-${gId}`);
+        const pbar = document.getElementById(`pbar-${gId}`);
+        const pfill = document.getElementById(`pfill-${gId}`);
+
+        if (files.length === 0) return;
+
+        pbar.style.display = 'block';
+        const BATCH_SIZE = 10;
+
+        for (let i = 0; i < files.length; i += BATCH_SIZE) {
+            const batch = files.slice(i, i + BATCH_SIZE);
+            stat.innerText = `DEPLOYING: ${i} to ${Math.min(i + BATCH_SIZE, files.length)} of ${files.length} images...`;
+            
+            await Promise.all(batch.map(async (file) => {
+                const path = `${gId}/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
+                const { error: upErr } = await sb.storage.from('photos').upload(path, file);
+                
+                if (!upErr) {
+                    const { data: { publicUrl } } = sb.storage.from('photos').getPublicUrl(path);
+                    return sb.from('pe_photos').insert([{ 
+                        gallery_id: gId, 
+                        preview_url: publicUrl, 
+                        full_res_url: publicUrl, 
+                        price: 15 
+                    }]);
+                }
+            }));
+            pfill.style.width = ((i + batch.length) / files.length * 100) + '%';
+        }
+
+        // FUNDAMENTAL FIX: Once finished, force the gallery to LIVE
+        stat.innerText = "FINALIZING DEPLOYMENT...";
+        await sb.from('pe_galleries').update({ is_live: true }).eq('id', gId);
+        
+        stat.innerText = "SUCCESSFULLY DEPLOYED TO PUBLIC SITE ✓";
+        setTimeout(() => { pbar.style.display = 'none'; refreshUI(); }, 2000);
+    }
+
+    async function toggleLive(id, curr) { 
+        await sb.from('pe_galleries').update({ is_live: !curr }).eq('id', id); 
+        refreshUI(); 
+    }
+
+    async function del(id) { 
+        if(confirm("Permanently delete this event?")) { 
+            await sb.from('pe_galleries').delete().eq('id', id); 
+            refreshUI(); 
+        } 
+    }
+
+    refreshUI();
+</script>
 </body>
 </html>

@@ -3,23 +3,56 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>KlickPix | Checkout</title>
+    <title>Checkout | KLICKPIX</title>
     <link rel="stylesheet" href="style.css">
-</head>
-<body>
-    <header class="header">
-        <div class="logo">KLICK<span>PIX</span> CHECKOUT</div>
-    </header>
-    <main class="container">
-        <div class="admin-panel" style="max-width: 600px; margin: 0 auto; text-align: center;">
-            <h2 style="font-family: 'Syne', sans-serif; margin-bottom: 1rem;">Confirm Your Purchase</h2>
-            <div id="orderSummary" style="margin-bottom: 2rem; padding: 1rem; border: 1px solid #eee; border-radius: 8px;">
-                Loading your Pix...
-            </div>
-            <button class="btn btn-brand" style="width: 100%;">Pay with PayPal</button>
-            <p style="margin-top: 1rem; font-size: 0.8rem; opacity: 0.5;">Secure Instant Download after Payment.</p>
-        </div>
-    </main>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="data.js"></script>
+    <script src="https://www.paypal.com/sdk/js?client-id=test&currency=NZD"></script>
+</head>
+<body style="background:#f9fafb; font-family:'Syne', sans-serif;">
+
+    <div id="checkout-container" style="max-width:600px; margin:50px auto; padding:20px; text-align:center;">
+        <button onclick="window.history.back()" style="background:none; border:none; cursor:pointer; font-weight:bold; margin-bottom:20px; opacity:0.5;">← CANCEL</button>
+        
+        <div id="photo-preview" style="background:white; padding:15px; border-radius:20px; box-shadow:0 20px 40px rgba(0,0,0,0.1);">
+            <img id="target-img" src="" style="width:100%; border-radius:12px; display:block; margin-bottom:20px;">
+            <h2 id="photo-price" style="font-size:2rem; margin:0;">...</h2>
+            <p style="color:#666; font-size:0.9rem; margin:10px 0 25px;">Digital High-Res Download</p>
+            
+            <div id="paypal-button-container"></div>
+        </div>
+    </div>
+
+    <script>
+        const sb = supabase.createClient(window.KLICKPIX_CONFIG.SUPABASE_URL, window.KLICKPIX_CONFIG.SUPABASE_ANON_KEY);
+        const urlParams = new URLSearchParams(window.location.search);
+        const photoId = urlParams.get('photo');
+
+        async function loadPhoto() {
+            const { data: photo } = await sb.from('pe_photos').select('*').eq('id', photoId).single();
+            if (photo) {
+                document.getElementById('target-img').src = photo.preview_url;
+                document.getElementById('photo-price').innerText = `$${photo.price} NZD`;
+                
+                // Initialize PayPal
+                paypal.Buttons({
+                    createOrder: (data, actions) => {
+                        return actions.order.create({
+                            purchase_units: [{
+                                amount: { value: photo.price.toString() }
+                            }]
+                        });
+                    },
+                    onApprove: (data, actions) => {
+                        return actions.order.capture().then(details => {
+                            alert('Payment Successful, ' + details.payer.name.given_name);
+                            // Next move: Update DB and show download link
+                        });
+                    }
+                }).render('#paypal-button-container');
+            }
+        }
+        loadPhoto();
+    </script>
 </body>
 </html>

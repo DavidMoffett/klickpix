@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KlickPix | Browse Gallery</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="data.js"></script>
+    <style>
+        body { background: #f8fafc; font-family: 'Syne', sans-serif; color: #0f172a; margin: 0; padding: 40px 20px; }
+        .container { max-width: 1400px; margin: 0 auto; }
+        .gallery-header { margin-bottom: 40px; display: flex; justify-content: space-between; align-items: flex-end; }
+        .photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 15px; }
+        .photo-item { aspect-ratio: 1/1; background: #e2e8f0; border-radius: 12px; overflow: hidden; cursor: pointer; position: relative; border: 1px solid #e2e8f0; }
+        .photo-item img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.3s; }
+        .photo-item:hover img { transform: scale(1.05); }
+        .buy-overlay { position: absolute; bottom: 10px; right: 10px; background: rgba(15, 23, 42, 0.9); color: white; padding: 8px 15px; border-radius: 8px; font-weight: 800; font-size: 0.8rem; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="gallery-header">
+        <div>
+            <a href="index.html" style="text-decoration:none; color:#64748b; font-weight:700; font-size:0.9rem;">← BACK TO EVENTS</a>
+            <h1 id="gallery-title" style="font-size: 3rem; letter-spacing: -3px; margin: 10px 0 0 0;">Loading Gallery...</h1>
+        </div>
+        <div id="photo-count" style="font-weight: 800; color: #64748b;"></div>
+    </div>
+
+    <div id="photo-grid" class="photo-grid">
+        </div>
+</div>
+
+<script>
+    const sb = supabase.createClient(window.KLICKPIX_CONFIG.SUPABASE_URL, window.KLICKPIX_CONFIG.SUPABASE_ANON_KEY);
+
+    // 1. Get ID from URL (?id=2)
+    const urlParams = new URLSearchParams(window.location.search);
+    const galleryId = urlParams.get('id');
+
+    async function loadGallery() {
+        if (!galleryId) {
+            document.getElementById('gallery-title').innerText = "Gallery Not Found";
+            return;
+        }
+
+        // 2. Fetch Gallery Title
+        const { data: gallery } = await sb.from('pe_galleries').select('title').eq('id', galleryId).single();
+        if (gallery) document.getElementById('gallery-title').innerText = gallery.title.toUpperCase();
+
+        // 3. Fetch Photos
+        const { data: photos, error } = await sb
+            .from('pe_photos')
+            .select('*')
+            .eq('gallery_id', galleryId);
+
+        const grid = document.getElementById('photo-grid');
+        document.getElementById('photo-count').innerText = `${photos ? photos.length : 0} PHOTOS`;
+
+        if (error || !photos || photos.length === 0) {
+            grid.innerHTML = `<p>No photos found in this gallery yet.</p>`;
+            return;
+        }
+
+        grid.innerHTML = photos.map(p => `
+            <div class="photo-item" onclick="openPurchase(${p.id})">
+                <img src="${p.preview_url}" loading="lazy">
+                <div class="buy-overlay">BUY $15</div>
+            </div>
+        `).join('');
+    }
+
+    function openPurchase(photoId) {
+        // This is where we will trigger the PayPal Paywall next
+        alert("Linking to PayPal for Photo ID: " + photoId);
+    }
+
+    loadGallery();
+</script>
+</body>
+</html>
