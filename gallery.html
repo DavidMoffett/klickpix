@@ -5,52 +5,57 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>KlickPix | Gallery</title>
-    <link rel="stylesheet" href="style.css?v=16.0">
+    <link rel="stylesheet" href="style.css?v=17.0">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="data.js?v=16.0"></script>
+    <script src="https://www.paypal.com/sdk/js?client-id=YOUR_PAYPAL_CLIENT_ID&currency=NZD"></script>
+    <script src="data.js?v=17.0"></script>
     <style>
         body { background: #0f172a; font-family: 'Syne', sans-serif; color: white; padding: 40px 20px; }
         .container { max-width: 1600px; margin: 0 auto; }
         .logo { font-size: 1.8rem; font-weight: 800; letter-spacing: -1px; margin-bottom: 20px; color: #ffffff; text-decoration:none; display:inline-block; }
         .logo span { color: #e11d48; }
-        #cart-link { position: fixed; top: 40px; right: 40px; background: #e11d48; color: white; padding: 12px 24px; border-radius: 8px; font-weight: 800; text-decoration: none; display: none; z-index: 100; }
         .photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 15px; }
         .photo-card { background: #1e293b; border-radius: 8px; overflow: hidden; position: relative; border: 1px solid #334155; }
-        .photo-card img { width: 100%; aspect-ratio: 1/1; object-fit: cover; cursor: pointer; display: block; }
+        .photo-card img { width: 100%; aspect-ratio: 1/1; object-fit: cover; display: block; }
         .info-panel { padding: 12px; display: flex; justify-content: space-between; align-items: center; }
         .img-no { font-size: 0.8rem; font-weight: 800; color: #94a3b8; }
+        
+        /* The Buttons */
         .add-btn { background: #334155; color: white; border: none; padding: 8px 14px; border-radius: 4px; font-weight: 800; font-size: 0.65rem; cursor: pointer; }
         .add-btn.in-cart { background: #e11d48; }
+        .download-btn { background: #22c55e; color: white; border: none; padding: 8px 14px; border-radius: 4px; font-weight: 800; font-size: 0.65rem; cursor: pointer; text-decoration: none; }
+        
         .watermark-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; opacity: 0.35; z-index: 5; display: flex; flex-wrap: wrap; justify-content: center; align-content: center; overflow: hidden; }
         .wm-text { transform: rotate(-45deg); white-space: nowrap; font-weight: 900; font-size: 1.2rem; text-transform: uppercase; }
-        #preview-modal { display:none; position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(10, 15, 26, 0.98); z-index:1000; flex-direction: column; justify-content:center; align-items:center; }
-        .preview-stage { position: relative; max-width: 90%; max-height: 70vh; }
-        #full-img { max-width: 100%; max-height: 70vh; border-radius: 4px; display: block; }
-        .preview-controls { margin-top: 25px; text-align: center; }
-        .buy-large-btn { background: #e11d48; color: white; border: none; padding: 16px 32px; border-radius: 8px; font-weight: 800; font-size: 1rem; cursor: pointer; }
-        .close-x { position: fixed; top: 30px; right: 40px; font-size: 2.5rem; cursor: pointer; color: #475569; }
+        
+        /* Success Overlay */
+        #payment-success { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(15, 23, 42, 0.98); z-index:9999; align-items:center; justify-content:center; }
     </style>
 </head>
 <body>
+    <div id="payment-success">
+        <div style="background:#1e293b; padding:40px; border-radius:12px; border:2px solid #22c55e; max-width:400px; text-align:center;">
+            <h2 style="margin-bottom:10px;">Success!</h2>
+            <p style="color:#94a3b8; margin-bottom:30px;">Payment received. You can now download your high-res photos directly from the gallery.</p>
+            <button onclick="closeSuccess()" style="background:#22c55e; color:white; border:none; padding:15px 30px; border-radius:8px; font-weight:800; cursor:pointer; width:100%;">ACCESS DOWNLOADS</button>
+        </div>
+    </div>
+
     <a href="index.html" class="logo">Klick<span>Pix</span></a>
-    <a href="checkout.html" id="cart-link">VIEW CART (<span id="cart-count">0</span>)</a>
+    <div id="paypal-container" style="max-width:300px; margin-bottom:20px;"></div>
+
     <div class="container">
         <h1 id="gallery-title" style="letter-spacing:-2px; margin-bottom:40px;">Loading...</h1>
         <div id="photo-grid" class="photo-grid"></div>
     </div>
-    <div id="preview-modal">
-        <span class="close-x" onclick="closeModal()">✕</span>
-        <div class="preview-stage">
-            <img id="full-img" src="" oncontextmenu="return false;">
-            <div id="modal-wm" class="watermark-overlay"></div>
-        </div>
-        <div class="preview-controls" id="preview-controls"></div>
-    </div>
+
     <script>
         const sb = supabase.createClient(window.KLICKPIX_CONFIG.SUPABASE_URL, window.KLICKPIX_CONFIG.SUPABASE_ANON_KEY);
         const urlParams = new URLSearchParams(window.location.search);
         const gId = urlParams.get('id');
         let photoData = [], cart = JSON.parse(localStorage.getItem('kp_cart')) || [], wmHTML = '';
+        let isPaid = localStorage.getItem('kp_paid_id') === gId; // Check if this specific gallery is paid
+
         async function init() {
             if (!gId) return;
             const { data: g } = await sb.from('pe_galleries').select('*').eq('id', gId).single();
@@ -58,49 +63,60 @@
             document.getElementById('gallery-title').innerText = g.title;
             const label = g.watermark_text || 'KlickPix';
             wmHTML = `<div class="wm-text" style="color:${g.watermark_color || '#FFFFFF'};">${new Array(12).fill(label).join(' &nbsp; ')}</div>`.repeat(10);
+            
             const { data: photos } = await sb.from('pe_photos').select('*').eq('gallery_id', gId).order('created_at', { ascending: true });
             photoData = photos || [];
             renderGrid();
-            updateCartLink();
+            if (!isPaid) setupPayPal();
         }
+
         function renderGrid() {
             document.getElementById('photo-grid').innerHTML = photoData.map((p, i) => {
                 const inCart = cart.includes(p.id);
+                // IF PAID: Show Download Button. IF NOT: Show Add to Cart.
+                const buttonHTML = isPaid 
+                    ? `<a href="${p.high_res_url}" download="KlickPix_${i+1}.jpg" class="download-btn">DOWNLOAD</a>`
+                    : `<button id="btn-${p.id}" class="add-btn ${inCart ? 'in-cart' : ''}" onclick="toggleCart('${p.id}')">${inCart ? 'ADDED' : 'ADD TO CART'}</button>`;
+
                 return `<div class="photo-card">
-                    <div class="watermark-overlay">${wmHTML}</div>
-                    <img src="${p.preview_url}" onclick="openPreview(${i})" oncontextmenu="return false;">
+                    ${isPaid ? '' : `<div class="watermark-overlay">${wmHTML}</div>`}
+                    <img src="${p.preview_url}" oncontextmenu="return false;">
                     <div class="info-panel">
                         <span class="img-no">PHOTO #${i+1}</span>
-                        <button id="btn-${p.id}" class="add-btn ${inCart ? 'in-cart' : ''}" onclick="toggleCart('${p.id}')">${inCart ? 'ADDED' : 'ADD TO CART'}</button>
+                        ${buttonHTML}
                     </div>
                 </div>`;
             }).join('');
         }
+
         function toggleCart(id) {
             const idx = cart.indexOf(id);
             if (idx > -1) cart.splice(idx, 1); else cart.push(id);
             localStorage.setItem('kp_cart', JSON.stringify(cart));
-            renderGrid(); updateCartLink();
+            renderGrid();
         }
-        function openPreview(i) {
-            const p = photoData[i];
-            document.getElementById('full-img').src = p.preview_url;
-            document.getElementById('modal-wm').innerHTML = wmHTML;
-            document.getElementById('preview-controls').innerHTML = `
-                <p style="font-weight:800; margin-bottom:15px; color:#94a3b8;">PHOTO #${i+1}</p>
-                <button class="buy-large-btn" onclick="addToCartAndGo('${p.id}')">ADD & VIEW CART</button>`;
-            document.getElementById('preview-modal').style.display = 'flex';
+
+        function setupPayPal() {
+            paypal.Buttons({
+                createOrder: (data, actions) => {
+                    return actions.order.create({
+                        purchase_units: [{ amount: { value: '20.00' }, description: 'Gallery Access: ' + gId }]
+                    });
+                },
+                onApprove: (data, actions) => {
+                    return actions.order.capture().then(details => {
+                        localStorage.setItem('kp_paid_id', gId); // Unlock this gallery
+                        isPaid = true;
+                        document.getElementById('payment-success').style.display = 'flex';
+                        renderGrid();
+                        document.getElementById('paypal-container').style.display = 'none';
+                    });
+                }
+            }).render('#paypal-container');
         }
-        function addToCartAndGo(id) {
-            if (!cart.includes(id)) { cart.push(id); localStorage.setItem('kp_cart', JSON.stringify(cart)); }
-            window.location.href = 'checkout.html';
-        }
-        function updateCartLink() {
-            const c = cart.length;
-            document.getElementById('cart-count').innerText = c;
-            document.getElementById('cart-link').style.display = c > 0 ? 'block' : 'none';
-        }
-        function closeModal() { document.getElementById('preview-modal').style.display = 'none'; }
+
+        function closeSuccess() { document.getElementById('payment-success').style.display = 'none'; }
+        
         init();
     </script>
 </body>
