@@ -1,85 +1,52 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <script>if (localStorage.getItem('kp_access') !== 'true') { window.location.href = 'landing.html'; }</script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>KlickPix | Gallery</title>
-    <link rel="stylesheet" href="style.css?v=23.0">
-    <script src="data.js?v=23.0"></script>
+    <title>KlickPix | Checkout</title>
+    <link rel="stylesheet" href="style.css?v=24.0">
+    <script src="data.js?v=24.0"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <style>
-        body { background: #0f172a; color: white; font-family: 'Syne', sans-serif; padding: 40px 20px; }
-        .container { max-width: 1400px; margin: 0 auto; }
-        .logo { font-size: 2rem; font-weight: 800; color: white; text-decoration: none; display: block; margin-bottom: 40px; }
-        .logo span { color: #e11d48; }
-        .photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
-        .photo-card { background: #1e293b; border-radius: 12px; overflow: hidden; border: 1px solid #334155; position: relative; }
-        .photo-card img { width: 100%; aspect-ratio: 1/1; object-fit: cover; display: block; cursor: zoom-in; }
-        .info-panel { padding: 15px; display: flex; justify-content: space-between; align-items: center; }
-        .btn-add { background: #334155; color: white; border: none; padding: 10px 18px; border-radius: 6px; font-weight: 800; cursor: pointer; transition: 0.3s; }
-        .btn-add.in-cart { background: #e11d48; }
-        .cart-bar { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); background: #22c55e; color: white; padding: 15px 40px; border-radius: 50px; text-decoration: none; font-weight: 800; display: none; z-index: 1000; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
-        #photo-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.95); z-index: 2000; align-items: center; justify-content: center; cursor: zoom-out; }
-        #modal-img { max-width: 90%; max-height: 90%; border-radius: 8px; }
-    </style>
 </head>
-<body>
-    <div id="photo-modal" onclick="this.style.display='none'"><img id="modal-img" src=""></div>
-    <div class="container">
-        <a href="index.html" class="logo">Klick<span>Pix</span></a>
-        <h1 id="gallery-title" style="margin-bottom:40px; letter-spacing: -3px; font-size: 3rem;">Loading...</h1>
-        <div id="photo-grid" class="photo-grid"></div>
+<body style="background: #0f172a; color: white; font-family: 'Syne', sans-serif; padding: 40px 20px;">
+    <div style="max-width: 600px; margin: 0 auto;">
+        <a href="index.html" style="text-decoration:none; color:white; font-weight:800; font-size:1.5rem;">Klick<span style="color:#e11d48;">Pix</span></a>
+        <h1 style="letter-spacing:-2px; margin-top:20px;">Review Order</h1>
+        <div id="cart-list" style="background:#1e293b; padding:20px; border-radius:12px; margin-bottom:20px; border:1px solid #334155;"></div>
+        <div style="font-size: 2rem; font-weight: 800; display: flex; justify-content: space-between; margin-bottom: 30px; color: #22c55e;">
+            <span>Total</span><span id="total-price">$0.00</span>
+        </div>
+        <div id="paypal-button-container"></div>
     </div>
-    <a href="checkout.html" id="cart-float" class="cart-bar">VIEW CART & CHECKOUT</a>
 
     <script>
         const sb = supabase.createClient(window.KLICKPIX_CONFIG.SUPABASE_URL, window.KLICKPIX_CONFIG.SUPABASE_ANON_KEY);
-        const urlParams = new URLSearchParams(window.location.search);
-        const gId = urlParams.get('id');
         let cart = JSON.parse(localStorage.getItem('kp_cart')) || [];
 
         async function init() {
-            if (!gId) return;
-            const { data: gallery } = await sb.from('pe_galleries').select('*').eq('id', gId).single();
-            if (gallery) document.getElementById('gallery-title').innerText = gallery.title;
-            const { data: photos } = await sb.from('pe_photos').select('*').eq('gallery_id', gId).order('created_at', { ascending: true });
-            if (photos) render(photos);
-            updateUI();
-        }
-
-        function render(photos) {
-            document.getElementById('photo-grid').innerHTML = photos.map((p, i) => `
-                <div class="photo-card">
-                    <img src="${p.preview_url}" onclick="openModal('${p.preview_url}')" oncontextmenu="return false;">
-                    <div class="info-panel">
-                        <span style="color:#64748b; font-weight:700;">PHOTO #${i+1}</span>
-                        <button class="btn-add ${cart.includes(p.id) ? 'in-cart' : ''}" onclick="toggleCart('${p.id}')">
-                            ${cart.includes(p.id) ? 'REMOVE' : 'ADD TO CART'}
-                        </button>
-                    </div>
+            if(cart.length === 0) { window.location.href = 'index.html'; return; }
+            const { data: photos } = await sb.from('pe_photos').select('*').in('id', cart);
+            document.getElementById('cart-list').innerHTML = photos.map(p => `
+                <div style="display:flex; justify-content:space-between; padding:10px 0; border-bottom:1px solid #334155;">
+                    <span>Photo ID: ${p.id.slice(0,5)}</span>
+                    <span>$${window.KLICKPIX_CONFIG.PRICE_PER_PHOTO.toFixed(2)}</span>
                 </div>`).join('');
-        }
+            const total = (photos.length * window.KLICKPIX_CONFIG.PRICE_PER_PHOTO).toFixed(2);
+            document.getElementById('total-price').innerText = `$${total}`;
 
-        function openModal(url) {
-            const m = document.getElementById('photo-modal');
-            document.getElementById('modal-img').src = url;
-            m.style.display = 'flex';
-        }
-
-        function toggleCart(id) {
-            const idx = cart.indexOf(id);
-            if (idx > -1) cart.splice(idx, 1); else cart.push(id);
-            localStorage.setItem('kp_cart', JSON.stringify(cart));
-            location.reload();
-        }
-
-        function updateUI() {
-            const bar = document.getElementById('cart-float');
-            if (cart.length > 0) {
-                bar.style.display = 'block';
-                bar.innerText = `VIEW CART (${cart.length} PHOTOS) & CHECKOUT`;
-            }
+            const script = document.createElement('script');
+            script.src = `https://www.paypal.com/sdk/js?client-id=${window.KLICKPIX_CONFIG.PAYPAL_CLIENT_ID}&currency=${window.KLICKPIX_CONFIG.CURRENCY_CODE}`;
+            script.onload = () => {
+                paypal.Buttons({
+                    createOrder: (data, actions) => actions.order.create({ purchase_units: [{ amount: { value: total } }] }),
+                    onApprove: (data, actions) => actions.order.capture().then(() => {
+                        sessionStorage.setItem('kp_last_purchase', JSON.stringify(cart));
+                        localStorage.removeItem('kp_cart');
+                        window.location.href = 'success.html';
+                    })
+                }).render('#paypal-button-container');
+            };
+            document.head.appendChild(script);
         }
         init();
     </script>
