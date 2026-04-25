@@ -3,70 +3,31 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>KlickPix | Your Photos</title>
-    <link rel="stylesheet" href="style.css?v=18.0">
+    <title>Success | KlickPix</title>
+    <link rel="stylesheet" href="style.css?v=22.0">
+    <script src="data.js?v=22.0"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="data.js?v=18.0"></script>
-    <style>
-        body { background: #0f172a; font-family: 'Syne', sans-serif; color: white; padding: 40px 20px; text-align: center; }
-        .container { max-width: 800px; margin: 0 auto; }
-        .logo { font-size: 2rem; font-weight: 800; letter-spacing: -1px; margin-bottom: 20px; color: #ffffff; text-decoration:none; }
-        .logo span { color: #e11d48; }
-        .success-header { margin-bottom: 40px; }
-        .success-header h1 { font-size: 2.5rem; letter-spacing: -2px; margin-bottom: 10px; }
-        .download-grid { display: grid; grid-template-columns: 1fr; gap: 20px; margin-top: 40px; }
-        .download-card { background: #1e293b; padding: 20px; border-radius: 12px; display: flex; align-items: center; justify-content: space-between; border: 1px solid #334155; }
-        .download-card img { width: 80px; height: 80px; object-fit: cover; border-radius: 6px; }
-        .btn-download { background: #22c55e; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 800; font-size: 0.9rem; }
-    </style>
 </head>
-<body>
-    <div class="container">
-        <a href="index.html" class="logo">Klick<span>Pix</span></a>
-        
-        <div class="success-header">
-            <h1>Thank You!</h1>
-            <p style="color:#94a3b8;">Your payment was successful. Download your high-res photos below.</p>
-        </div>
-
-        <div id="download-list" class="download-grid">
-            </div>
-
-        <p style="margin-top:60px; color:#475569; font-size:0.8rem;">Need help? Contact support with your PayPal Transaction ID.</p>
-    </div>
+<body style="background: #0f172a; color: white; font-family: 'Syne', sans-serif; padding: 40px; text-align: center;">
+    <h1>Thank You!</h1>
+    <p>Your instant downloads are ready below:</p>
+    <div id="download-list" style="margin-top:40px; max-width: 600px; margin-left: auto; margin-right: auto;"></div>
 
     <script>
         const sb = supabase.createClient(window.KLICKPIX_CONFIG.SUPABASE_URL, window.KLICKPIX_CONFIG.SUPABASE_ANON_KEY);
-        
-        async function loadPurchasedPhotos() {
-            // 1. Get the IDs from the session (saved during checkout)
-            const boughtIds = JSON.parse(sessionStorage.getItem('kp_last_purchase')) || [];
-            
-            if (boughtIds.length === 0) {
-                document.getElementById('download-list').innerHTML = "<p>No photos found. Please check your email.</p>";
-                return;
-            }
-
-            // 2. Fetch the High-Res links from Supabase
-            const { data, error } = await sb.from('pe_photos').select('*').in('id', boughtIds);
-
-            if (data) {
-                document.getElementById('download-list').innerHTML = data.map((p, i) => `
-                    <div class="download-card">
-                        <img src="${p.preview_url}">
-                        <div style="text-align:left; flex-grow:1; margin-left:20px;">
-                            <span style="font-weight:800; font-size:0.9rem;">Photo #${i+1}</span>
-                        </div>
-                        <a href="${p.high_res_url}" download class="btn-download">DOWNLOAD HI-RES</a>
+        async function init() {
+            const ids = JSON.parse(sessionStorage.getItem('kp_last_purchase')) || [];
+            const { data: photos } = await sb.from('pe_photos').select('*').in('id', ids);
+            if(photos) {
+                document.getElementById('download-list').innerHTML = photos.map(p => `
+                    <div style="background:#1e293b; padding:20px; border-radius:12px; margin-bottom:15px; display:flex; align-items:center; justify-content:space-between; border:1px solid #334155;">
+                        <img src="${p.preview_url}" width="60" style="border-radius:4px;">
+                        <a href="${p.high_res_url}" download style="background:#22c55e; color:white; padding:10px 20px; border-radius:6px; font-weight:800; text-decoration:none;">DOWNLOAD</a>
                     </div>
                 `).join('');
-                
-                // 3. Clear the session so they can't just keep refreshing to see it (Integrity)
-                // Optional: sessionStorage.removeItem('kp_last_purchase');
             }
         }
-
-        loadPurchasedPhotos();
+        init();
     </script>
 </body>
 </html>

@@ -1,127 +1,56 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <script>
-        // Security Gate: Ensure they entered through the landing page
-        if (localStorage.getItem('kp_access') !== 'true') { window.location.href = 'landing.html'; }
-    </script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>KlickPix | Secure Checkout</title>
-    <link rel="stylesheet" href="style.css?v=21.0">
+    <title>KlickPix | Checkout</title>
+    <link rel="stylesheet" href="style.css?v=22.0">
+    <script src="data.js?v=22.0"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="https://www.paypal.com/sdk/js?client-id=Ad_2vFmXz5S0vHw2mQ9E_B3sQv6lY_p7-R3U8zX_G_W_C1_D&currency=NZD"></script>
-    <script src="data.js?v=21.0"></script>
-    <style>
-        body { background: #0f172a; font-family: 'Syne', sans-serif; color: white; padding: 40px 20px; }
-        .container { max-width: 600px; margin: 0 auto; }
-        .logo { font-size: 2rem; font-weight: 800; letter-spacing: -1px; margin-bottom: 40px; color: #ffffff; text-decoration:none; display:block; }
-        .logo span { color: #e11d48; }
-        
-        .order-summary { background: #1e293b; border-radius: 12px; padding: 30px; border: 1px solid #334155; margin-bottom: 30px; }
-        .cart-item { display: flex; justify-content: space-between; align-items: center; padding: 15px 0; border-bottom: 1px solid #334155; }
-        .cart-item img { width: 60px; height: 60px; object-fit: cover; border-radius: 6px; margin-right: 15px; border: 1px solid #475569; }
-        
-        .total-row { display: flex; justify-content: space-between; margin-top: 20px; padding-top: 20px; border-top: 2px solid #e11d48; font-size: 1.8rem; font-weight: 800; }
-        
-        #paypal-button-container { margin-top: 20px; min-height: 150px; }
-        .back-link { display: inline-block; margin-top: 30px; color: #64748b; text-decoration: none; font-size: 0.9rem; font-weight: 600; border-bottom: 1px solid transparent; transition: 0.3s; }
-        .back-link:hover { color: #e11d48; border-color: #e11d48; }
-        
-        .loading-text { text-align: center; color: #94a3b8; font-style: italic; }
-    </style>
 </head>
-<body>
-
-<div class="container">
-    <a href="index.html" class="logo">Klick<span>Pix</span></a>
-    
-    <div class="order-summary" id="summary-box">
-        <h2 style="letter-spacing:-1px; margin-bottom:20px;">Review Order</h2>
-        <div id="cart-items-list" class="loading-text">Loading your selection...</div>
-        
-        <div class="total-row">
-            <span>Total</span>
-            <span id="cart-total">$0.00</span>
+<body style="background: #0f172a; color: white; font-family: 'Syne', sans-serif; padding: 40px 20px;">
+    <div style="max-width: 600px; margin: 0 auto;">
+        <h1 style="letter-spacing:-2px;">Review Order</h1>
+        <div id="cart-list" style="background:#1e293b; padding:20px; border-radius:12px; margin-bottom:20px; border:1px solid #334155;"></div>
+        <div style="font-size: 2rem; font-weight: 800; display: flex; justify-content: space-between; margin-bottom: 30px; color: #22c55e;">
+            <span>Total</span><span id="total-price">$0.00</span>
         </div>
+        <div id="paypal-button-container"></div>
     </div>
 
-    <div id="paypal-button-container"></div>
-    
-    <div style="text-align: center;">
-        <a href="javascript:history.back()" class="back-link">← Go back to Gallery</a>
-    </div>
-</div>
+    <script>
+        const sb = supabase.createClient(window.KLICKPIX_CONFIG.SUPABASE_URL, window.KLICKPIX_CONFIG.SUPABASE_ANON_KEY);
+        let cart = JSON.parse(localStorage.getItem('kp_cart')) || [];
 
-<script>
-    // Initialize Supabase from your data.js config
-    const sb = supabase.createClient(window.KLICKPIX_CONFIG.SUPABASE_URL, window.KLICKPIX_CONFIG.SUPABASE_ANON_KEY);
-    
-    // Config: Change this to your desired price per photo
-    const PRICE_PER_PHOTO = 20.00; 
-    let cart = JSON.parse(localStorage.getItem('kp_cart')) || [];
-
-    async function loadCheckout() {
-        if (cart.length === 0) {
-            document.getElementById('summary-box').innerHTML = "<h2 style='text-align:center;'>Your cart is empty.</h2><p style='text-align:center; color:#94a3b8;'>Go back to the gallery to pick your shots.</p>";
-            return;
-        }
-
-        // Pull details from Supabase for the items currently in the cart
-        const { data: photos, error } = await sb.from('pe_photos').select('*').in('id', cart);
-
-        if (photos && photos.length > 0) {
-            const listHTML = photos.map((p, i) => `
-                <div class="cart-item">
-                    <div style="display:flex; align-items:center;">
-                        <img src="${p.preview_url}">
-                        <div>
-                            <div style="font-weight:800; font-size:1rem; color:white;">Photo #${p.id.slice(-4).toUpperCase()}</div>
-                            <div style="font-size:0.75rem; color:#64748b;">High-Resolution Digital</div>
-                        </div>
-                    </div>
-                    <span style="font-weight:800; color:#22c55e;">$${PRICE_PER_PHOTO.toFixed(2)}</span>
+        async function init() {
+            if(cart.length === 0) return;
+            const { data: photos } = await sb.from('pe_photos').select('*').in('id', cart);
+            
+            document.getElementById('cart-list').innerHTML = photos.map(p => `
+                <div style="display:flex; justify-content:space-between; padding:10px 0; border-bottom:1px solid #334155;">
+                    <span>Photo #${p.id.slice(0,5)}</span>
+                    <span>$${window.KLICKPIX_CONFIG.PRICE_PER_PHOTO.toFixed(2)}</span>
                 </div>
             `).join('');
-            
-            document.getElementById('cart-items-list').innerHTML = listHTML;
-            const finalTotal = (photos.length * PRICE_PER_PHOTO).toFixed(2);
-            document.getElementById('cart-total').innerText = `$${finalTotal}`;
 
-            startPayPal(finalTotal);
-        } else {
-            document.getElementById('cart-items-list').innerText = "Could not load photo details.";
+            const total = (photos.length * window.KLICKPIX_CONFIG.PRICE_PER_PHOTO).toFixed(2);
+            document.getElementById('total-price').innerText = `$${total}`;
+
+            const script = document.createElement('script');
+            script.src = `https://www.paypal.com/sdk/js?client-id=${window.KLICKPIX_CONFIG.PAYPAL_CLIENT_ID}&currency=${window.KLICKPIX_CONFIG.CURRENCY_CODE}`;
+            script.onload = () => {
+                paypal.Buttons({
+                    createOrder: (data, actions) => actions.order.create({ purchase_units: [{ amount: { value: total } }] }),
+                    onApprove: (data, actions) => actions.order.capture().then(() => {
+                        sessionStorage.setItem('kp_last_purchase', JSON.stringify(cart));
+                        localStorage.removeItem('kp_cart');
+                        window.location.href = 'success.html';
+                    })
+                }).render('#paypal-button-container');
+            };
+            document.head.appendChild(script);
         }
-    }
-
-    function startPayPal(amount) {
-        paypal.Buttons({
-            style: { layout: 'vertical', color: 'gold', shape: 'rect', label: 'paypal' },
-            createOrder: (data, actions) => {
-                return actions.order.create({
-                    purchase_units: [{
-                        amount: { value: amount },
-                        description: `KlickPix: ${cart.length} High-Res Digital Photos`
-                    }]
-                });
-            },
-            onApprove: (data, actions) => {
-                return actions.order.capture().then(details => {
-                    // 1. Store IDs for success page retrieval
-                    sessionStorage.setItem('kp_last_purchase', JSON.stringify(cart));
-
-                    // 2. Clear the cart
-                    localStorage.removeItem('kp_cart');
-
-                    // 3. Hand-off to Success Page
-                    window.location.href = 'success.html';
-                });
-            }
-        }).render('#paypal-button-container');
-    }
-
-    loadCheckout();
-</script>
-
+        init();
+    </script>
 </body>
 </html>
