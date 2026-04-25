@@ -3,56 +3,111 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Checkout | KLICKPIX</title>
-    <link rel="stylesheet" href="style.css">
+    <title>KlickPix | Review Order</title>
+    <link rel="stylesheet" href="style.css?v=14.0">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="data.js"></script>
-    <script src="https://www.paypal.com/sdk/js?client-id=test&currency=NZD"></script>
+    <script src="data.js?v=14.0"></script>
+    <script src="https://www.paypal.com/sdk/js?client-id=AXFu1IvLoy8r_Picp3ktJmf3arbfftfdL-vN8xp43FodnK6w7gnjqL_QZ6DwfgmryNfbv20QrDjpRFJf&currency=NZD"></script>
+    <style>
+        body { background: #0f172a; font-family: 'Syne', sans-serif; color: white; padding: 40px 20px; }
+        .checkout-container { max-width: 500px; margin: 0 auto; }
+        .header h1 { font-size: 2.5rem; letter-spacing: -2px; text-transform: uppercase; margin-bottom: 40px; }
+        .cart-item { display: flex; align-items: center; background: #1e293b; padding: 15px; border-radius: 8px; margin-bottom: 12px; border: 1px solid #334155; }
+        .thumb-wrap { position: relative; width: 70px; height: 70px; margin-right: 15px; border-radius: 4px; overflow: hidden; flex-shrink: 0; }
+        .thumb-wrap img { width: 100%; height: 100%; object-fit: cover; }
+        .item-meta { flex-grow: 1; }
+        .item-name { font-weight: 800; font-size: 0.9rem; margin: 0; text-transform: uppercase; }
+        .remove-btn { background: none; border: none; color: #e11d48; font-weight: 800; font-size: 0.7rem; cursor: pointer; padding: 10px; }
+        .summary-box { margin-top: 40px; padding-top: 20px; border-top: 1px solid #334155; }
+        .total-row { display: flex; justify-content: space-between; font-size: 1.8rem; font-weight: 800; margin-bottom: 30px; }
+        .back-to-gallery { display: block; text-align: center; margin-top: 25px; color: #64748b; text-decoration: none; font-size: 0.7rem; font-weight: 800; text-transform: uppercase; }
+    </style>
 </head>
-<body style="background:#f9fafb; font-family:'Syne', sans-serif;">
+<body>
 
-    <div id="checkout-container" style="max-width:600px; margin:50px auto; padding:20px; text-align:center;">
-        <button onclick="window.history.back()" style="background:none; border:none; cursor:pointer; font-weight:bold; margin-bottom:20px; opacity:0.5;">← CANCEL</button>
-        
-        <div id="photo-preview" style="background:white; padding:15px; border-radius:20px; box-shadow:0 20px 40px rgba(0,0,0,0.1);">
-            <img id="target-img" src="" style="width:100%; border-radius:12px; display:block; margin-bottom:20px;">
-            <h2 id="photo-price" style="font-size:2rem; margin:0;">...</h2>
-            <p style="color:#666; font-size:0.9rem; margin:10px 0 25px;">Digital High-Res Download</p>
-            
-            <div id="paypal-button-container"></div>
-        </div>
+<div class="checkout-container">
+    <div class="header"><h1>Review Order</h1></div>
+    <div id="cart-list"><p style="color:#64748b;">Loading your selection...</p></div>
+    <div class="summary-box">
+        <div class="total-row"><span>TOTAL</span><span id="final-price">$0.00</span></div>
+        <div id="paypal-container"></div>
+        <a href="javascript:history.back()" class="back-to-gallery">← Continue Browsing</a>
     </div>
+</div>
 
-    <script>
-        const sb = supabase.createClient(window.KLICKPIX_CONFIG.SUPABASE_URL, window.KLICKPIX_CONFIG.SUPABASE_ANON_KEY);
-        const urlParams = new URLSearchParams(window.location.search);
-        const photoId = urlParams.get('photo');
+<script>
+    const sb = supabase.createClient(window.KLICKPIX_CONFIG.SUPABASE_URL, window.KLICKPIX_CONFIG.SUPABASE_ANON_KEY);
+    let cartIds = JSON.parse(localStorage.getItem('kp_cart')) || [];
+    let photoDetails = [], unitPrice = 15.00, masterList = [];
 
-        async function loadPhoto() {
-            const { data: photo } = await sb.from('pe_photos').select('*').eq('id', photoId).single();
-            if (photo) {
-                document.getElementById('target-img').src = photo.preview_url;
-                document.getElementById('photo-price').innerText = `$${photo.price} NZD`;
-                
-                // Initialize PayPal
-                paypal.Buttons({
-                    createOrder: (data, actions) => {
-                        return actions.order.create({
-                            purchase_units: [{
-                                amount: { value: photo.price.toString() }
-                            }]
-                        });
-                    },
-                    onApprove: (data, actions) => {
-                        return actions.order.capture().then(details => {
-                            alert('Payment Successful, ' + details.payer.name.given_name);
-                            // Next move: Update DB and show download link
-                        });
-                    }
-                }).render('#paypal-button-container');
-            }
+    async function init() {
+        if (cartIds.length === 0) {
+            document.getElementById('cart-list').innerHTML = '<p style="color:#64748b;">Your cart is empty.</p>';
+            return;
         }
-        loadPhoto();
-    </script>
+
+        // 1. Get full info for cart items
+        const { data } = await sb.from('pe_photos').select('*').in('id', cartIds);
+        photoDetails = data || [];
+
+        if (photoDetails.length > 0) {
+            // 2. Get price and master list from the first photo's gallery
+            const gId = photoDetails[0].gallery_id;
+            const { data: g } = await sb.from('pe_galleries').select('default_price').eq('id', gId).single();
+            if (g) unitPrice = g.default_price;
+
+            const { data: all } = await sb.from('pe_photos').select('id').eq('gallery_id', gId).order('created_at', { ascending: true });
+            masterList = all || [];
+        }
+
+        renderCart();
+    }
+
+    function renderCart() {
+        const list = document.getElementById('cart-list');
+        list.innerHTML = photoDetails.map(p => {
+            const originalIndex = masterList.findIndex(item => item.id === p.id);
+            const displayNo = originalIndex + 1;
+            return `
+            <div class="cart-item">
+                <div class="thumb-wrap"><img src="${p.preview_url}"></div>
+                <div class="item-meta">
+                    <p class="item-name">PHOTO #${displayNo}</p>
+                    <p style="margin:0; font-size:0.8rem; color:#64748b;">$${parseFloat(unitPrice).toFixed(2)}</p>
+                </div>
+                <button class="remove-btn" onclick="removeItem('${p.id}')">REMOVE</button>
+            </div>`;
+        }).join('');
+        const total = (photoDetails.length * unitPrice).toFixed(2);
+        document.getElementById('final-price').innerText = `$${total} NZD`;
+        renderPaypal(total);
+    }
+
+    function removeItem(id) {
+        cartIds = cartIds.filter(cid => cid != id);
+        photoDetails = photoDetails.filter(p => p.id != id);
+        localStorage.setItem('kp_cart', JSON.stringify(cartIds));
+        renderCart();
+    }
+
+    function renderPaypal(total) {
+        const con = document.getElementById('paypal-container');
+        con.innerHTML = '';
+        if (parseFloat(total) <= 0) return;
+        paypal.Buttons({
+            style: { layout: 'vertical', color: 'white', shape: 'rect' },
+            createOrder: (d, a) => a.order.create({ purchase_units: [{ amount: { currency_code: "NZD", value: total } }] }),
+            onApprove: async (d, a) => {
+                await a.order.capture();
+                con.innerHTML = `<div style="background:#22c55e; padding:20px; border-radius:8px;">
+                    <p style="font-weight:800; margin-bottom:10px;">SUCCESS! DOWNLOADS:</p>
+                    ${photoDetails.map(p => `<a href="${p.full_res_url}" download target="_blank" style="display:block; color:white; font-size:0.8rem; margin-top:8px; text-decoration:underline;">Download Photo #${masterList.findIndex(item => item.id === p.id) + 1}</a>`).join('')}
+                </div>`;
+                localStorage.removeItem('kp_cart');
+            }
+        }).render('#paypal-container');
+    }
+    init();
+</script>
 </body>
 </html>
