@@ -1,18 +1,19 @@
-<<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
+    <script>if (localStorage.getItem('kp_access') !== 'true') { window.location.href = 'landing.html'; }</script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>KlickPix | Gallery</title>
-    <link rel="stylesheet" href="style.css?v=14.0">
+    <link rel="stylesheet" href="style.css?v=16.0">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="data.js?v=14.0"></script>
+    <script src="data.js?v=16.0"></script>
     <style>
-        body { background: #0f172a; font-family: 'Syne', sans-serif; color: white; margin: 0; padding: 40px 20px; }
+        body { background: #0f172a; font-family: 'Syne', sans-serif; color: white; padding: 40px 20px; }
         .container { max-width: 1600px; margin: 0 auto; }
-        .gallery-header { margin-bottom: 40px; border-left: 4px solid #e11d48; padding-left: 20px; }
-        .back-link { color: #64748b; text-decoration: none; font-weight: 800; font-size: 0.7rem; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 10px; display: block; }
-        #cart-link { position: fixed; top: 40px; right: 40px; background: #e11d48; color: white; padding: 12px 24px; border-radius: 8px; font-weight: 800; text-decoration: none; display: none; z-index: 100; box-shadow: 0 10px 20px rgba(0,0,0,0.3); }
+        .logo { font-size: 1.8rem; font-weight: 800; letter-spacing: -1px; margin-bottom: 20px; color: #ffffff; text-decoration:none; display:inline-block; }
+        .logo span { color: #e11d48; }
+        #cart-link { position: fixed; top: 40px; right: 40px; background: #e11d48; color: white; padding: 12px 24px; border-radius: 8px; font-weight: 800; text-decoration: none; display: none; z-index: 100; }
         .photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 15px; }
         .photo-card { background: #1e293b; border-radius: 8px; overflow: hidden; position: relative; border: 1px solid #334155; }
         .photo-card img { width: 100%; aspect-ratio: 1/1; object-fit: cover; cursor: pointer; display: block; }
@@ -20,115 +21,87 @@
         .img-no { font-size: 0.8rem; font-weight: 800; color: #94a3b8; }
         .add-btn { background: #334155; color: white; border: none; padding: 8px 14px; border-radius: 4px; font-weight: 800; font-size: 0.65rem; cursor: pointer; }
         .add-btn.in-cart { background: #e11d48; }
-        .watermark-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; overflow: hidden; opacity: 0.35; z-index: 5; display: flex; flex-wrap: wrap; justify-content: center; align-content: center; }
+        .watermark-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; opacity: 0.35; z-index: 5; display: flex; flex-wrap: wrap; justify-content: center; align-content: center; overflow: hidden; }
         .wm-text { transform: rotate(-45deg); white-space: nowrap; font-weight: 900; font-size: 1.2rem; text-transform: uppercase; }
         #preview-modal { display:none; position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(10, 15, 26, 0.98); z-index:1000; flex-direction: column; justify-content:center; align-items:center; }
         .preview-stage { position: relative; max-width: 90%; max-height: 70vh; }
-        #full-img { max-width: 100%; max-height: 70vh; border-radius: 4px; display: block; border: 1px solid #334155; }
+        #full-img { max-width: 100%; max-height: 70vh; border-radius: 4px; display: block; }
         .preview-controls { margin-top: 25px; text-align: center; }
-        .buy-large-btn { display: inline-block; background: #e11d48; color: white; padding: 16px 32px; border-radius: 8px; font-weight: 800; font-size: 1rem; text-decoration: none; border: none; cursor: pointer; }
+        .buy-large-btn { background: #e11d48; color: white; border: none; padding: 16px 32px; border-radius: 8px; font-weight: 800; font-size: 1rem; cursor: pointer; }
         .close-x { position: fixed; top: 30px; right: 40px; font-size: 2.5rem; cursor: pointer; color: #475569; }
     </style>
 </head>
 <body>
-
-<a href="checkout.html" id="cart-link">VIEW CART (<span id="cart-count">0</span>)</a>
-
-<div class="container">
-    <div class="gallery-header">
-        <a href="index.html" class="back-link">← Back to Events</a>
-        <h1 id="gallery-title">Loading...</h1>
+    <a href="index.html" class="logo">Klick<span>Pix</span></a>
+    <a href="checkout.html" id="cart-link">VIEW CART (<span id="cart-count">0</span>)</a>
+    <div class="container">
+        <h1 id="gallery-title" style="letter-spacing:-2px; margin-bottom:40px;">Loading...</h1>
+        <div id="photo-grid" class="photo-grid"></div>
     </div>
-    <div id="photo-grid" class="photo-grid"></div>
-</div>
-
-<div id="preview-modal">
-    <span class="close-x" onclick="closeModal()">✕</span>
-    <div class="preview-stage">
-        <img id="full-img" src="" oncontextmenu="return false;">
-        <div id="modal-wm" class="watermark-overlay"></div>
+    <div id="preview-modal">
+        <span class="close-x" onclick="closeModal()">✕</span>
+        <div class="preview-stage">
+            <img id="full-img" src="" oncontextmenu="return false;">
+            <div id="modal-wm" class="watermark-overlay"></div>
+        </div>
+        <div class="preview-controls" id="preview-controls"></div>
     </div>
-    <div class="preview-controls" id="preview-controls"></div>
-</div>
-
-<script>
-    const sb = supabase.createClient(window.KLICKPIX_CONFIG.SUPABASE_URL, window.KLICKPIX_CONFIG.SUPABASE_ANON_KEY);
-    const urlParams = new URLSearchParams(window.location.search);
-    const gId = urlParams.get('id');
-    
-    let photoData = [];
-    let cart = JSON.parse(localStorage.getItem('kp_cart')) || [];
-    let wmHTML = '';
-
-    async function init() {
-        if (!gId) return;
-        const { data: g } = await sb.from('pe_galleries').select('*').eq('id', gId).single();
-        if (!g) return;
-        document.getElementById('gallery-title').innerText = g.title;
-
-        const label = g.watermark_text || 'KlickPix';
-        const color = g.watermark_color || '#FFFFFF';
-        wmHTML = `<div class="wm-text" style="color:${color};">${new Array(12).fill(label).join(' &nbsp; ')}</div>`.repeat(10);
-
-        const { data: photos } = await sb.from('pe_photos').select('*').eq('gallery_id', gId).order('created_at', { ascending: true });
-        photoData = photos || [];
-        renderGrid();
-        updateCartLink();
-    }
-
-    function renderGrid() {
-        document.getElementById('photo-grid').innerHTML = photoData.map((p, i) => {
-            const inCart = cart.includes(p.id);
-            return `
-            <div class="photo-card">
-                <div class="watermark-overlay">${wmHTML}</div>
-                <img src="${p.preview_url}" onclick="openPreview(${i})" oncontextmenu="return false;">
-                <div class="info-panel">
-                    <span class="img-no">PHOTO #${i + 1}</span>
-                    <button id="btn-${p.id}" class="add-btn ${inCart ? 'in-cart' : ''}" onclick="toggleCart('${p.id}')">
-                        ${inCart ? 'ADDED' : 'ADD TO CART'}
-                    </button>
-                </div>
-            </div>`;
-        }).join('');
-    }
-
-    function toggleCart(id) {
-        const idx = cart.indexOf(id);
-        if (idx > -1) cart.splice(idx, 1);
-        else cart.push(id);
-        localStorage.setItem('kp_cart', JSON.stringify(cart));
-        renderGrid();
-        updateCartLink();
-    }
-
-    function openPreview(i) {
-        const p = photoData[i];
-        document.getElementById('full-img').src = p.preview_url;
-        document.getElementById('modal-wm').innerHTML = wmHTML;
-        document.getElementById('preview-controls').innerHTML = `
-            <p style="font-weight:800; margin-bottom:15px; color:#94a3b8;">PHOTO #${i + 1}</p>
-            <button class="buy-large-btn" onclick="addToCartAndGo('${p.id}')">ADD & VIEW CART</button>
-        `;
-        document.getElementById('preview-modal').style.display = 'flex';
-    }
-
-    function addToCartAndGo(id) {
-        if (!cart.includes(id)) {
-            cart.push(id);
-            localStorage.setItem('kp_cart', JSON.stringify(cart));
+    <script>
+        const sb = supabase.createClient(window.KLICKPIX_CONFIG.SUPABASE_URL, window.KLICKPIX_CONFIG.SUPABASE_ANON_KEY);
+        const urlParams = new URLSearchParams(window.location.search);
+        const gId = urlParams.get('id');
+        let photoData = [], cart = JSON.parse(localStorage.getItem('kp_cart')) || [], wmHTML = '';
+        async function init() {
+            if (!gId) return;
+            const { data: g } = await sb.from('pe_galleries').select('*').eq('id', gId).single();
+            if (!g) return;
+            document.getElementById('gallery-title').innerText = g.title;
+            const label = g.watermark_text || 'KlickPix';
+            wmHTML = `<div class="wm-text" style="color:${g.watermark_color || '#FFFFFF'};">${new Array(12).fill(label).join(' &nbsp; ')}</div>`.repeat(10);
+            const { data: photos } = await sb.from('pe_photos').select('*').eq('gallery_id', gId).order('created_at', { ascending: true });
+            photoData = photos || [];
+            renderGrid();
+            updateCartLink();
         }
-        window.location.href = 'checkout.html';
-    }
-
-    function updateCartLink() {
-        const count = cart.length;
-        document.getElementById('cart-count').innerText = count;
-        document.getElementById('cart-link').style.display = count > 0 ? 'block' : 'none';
-    }
-
-    function closeModal() { document.getElementById('preview-modal').style.display = 'none'; }
-    init();
-</script>
+        function renderGrid() {
+            document.getElementById('photo-grid').innerHTML = photoData.map((p, i) => {
+                const inCart = cart.includes(p.id);
+                return `<div class="photo-card">
+                    <div class="watermark-overlay">${wmHTML}</div>
+                    <img src="${p.preview_url}" onclick="openPreview(${i})" oncontextmenu="return false;">
+                    <div class="info-panel">
+                        <span class="img-no">PHOTO #${i+1}</span>
+                        <button id="btn-${p.id}" class="add-btn ${inCart ? 'in-cart' : ''}" onclick="toggleCart('${p.id}')">${inCart ? 'ADDED' : 'ADD TO CART'}</button>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+        function toggleCart(id) {
+            const idx = cart.indexOf(id);
+            if (idx > -1) cart.splice(idx, 1); else cart.push(id);
+            localStorage.setItem('kp_cart', JSON.stringify(cart));
+            renderGrid(); updateCartLink();
+        }
+        function openPreview(i) {
+            const p = photoData[i];
+            document.getElementById('full-img').src = p.preview_url;
+            document.getElementById('modal-wm').innerHTML = wmHTML;
+            document.getElementById('preview-controls').innerHTML = `
+                <p style="font-weight:800; margin-bottom:15px; color:#94a3b8;">PHOTO #${i+1}</p>
+                <button class="buy-large-btn" onclick="addToCartAndGo('${p.id}')">ADD & VIEW CART</button>`;
+            document.getElementById('preview-modal').style.display = 'flex';
+        }
+        function addToCartAndGo(id) {
+            if (!cart.includes(id)) { cart.push(id); localStorage.setItem('kp_cart', JSON.stringify(cart)); }
+            window.location.href = 'checkout.html';
+        }
+        function updateCartLink() {
+            const c = cart.length;
+            document.getElementById('cart-count').innerText = c;
+            document.getElementById('cart-link').style.display = c > 0 ? 'block' : 'none';
+        }
+        function closeModal() { document.getElementById('preview-modal').style.display = 'none'; }
+        init();
+    </script>
 </body>
 </html>
