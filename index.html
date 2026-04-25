@@ -3,55 +3,58 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>KlickPix Entrance</title>
-    <script src="data.js?v=50.0"></script>
+    <title>KlickPix | Live Gallery</title>
+    <script src="data.js?v=51.0"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
-        body { background: #0f172a; color: white; font-family: sans-serif; text-align: center; padding-top: 20vh; margin: 0; }
-        .logo { font-size: 4rem; font-weight: 900; }
+        body { background: #0f172a; color: white; font-family: sans-serif; text-align: center; padding: 20px; margin: 0; }
+        .logo { font-size: 3rem; font-weight: 900; margin: 20px 0; }
         .logo span { color: #e11d48; }
-        .btn { 
-            display: none; padding: 25px 50px; background: #e11d48; 
-            color: white; text-decoration: none; font-weight: bold; border-radius: 12px;
-            font-size: 1.5rem; margin-top: 40px; box-shadow: 0 10px 30px rgba(225, 29, 72, 0.3);
-        }
-        #status { color: #64748b; margin-top: 20px; font-weight: bold; }
+        .photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; max-width: 1200px; margin: 0 auto; }
+        .photo-card { background: #1e293b; border-radius: 12px; overflow: hidden; border: 1px solid #334155; position: relative; }
+        .photo-card img { width: 100%; aspect-ratio: 1/1; object-fit: cover; display: block; }
+        .wm-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 5; pointer-events: none; display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); opacity: 0.5; }
+        .wm-unit { display: flex; align-items: center; justify-content: center; transform: rotate(-30deg); font-weight: 900; font-size: 0.7rem; color: white; text-shadow: 1px 1px 2px #000; }
+        .btn-buy { background: #e11d48; color: white; border: none; padding: 15px; width: 100%; font-weight: bold; cursor: pointer; }
     </style>
 </head>
 <body>
     <h1 class="logo">Klick<span>Pix</span></h1>
-    <p>Instant High-Resolution Memories</p>
-    
-    <div id="status">Locating "Bring a Friend"...</div>
-    <a href="#" id="enter-link" class="btn">VIEW BRING A FRIEND PHOTOS</a>
+    <div id="status">Waking up the engine...</div>
+    <div id="photo-grid" class="photo-grid"></div>
 
     <script>
         window.addEventListener('load', async () => {
             const conf = window.KLICKPIX_CONFIG;
+            const grid = document.getElementById('photo-grid');
             const status = document.getElementById('status');
-            const btn = document.getElementById('enter-link');
-            
+
             try {
                 const sb = supabase.createClient(conf.SUPABASE_URL, conf.SUPABASE_ANON_KEY);
                 
-                // Search by title instead of requiring the ID string
-                const { data: galleries, error } = await sb
-                    .from('pe_galleries')
-                    .select('id')
-                    .ilike('title', '%Bring a Friend%')
-                    .limit(1);
+                // 1. Get the latest gallery
+                const { data: g } = await sb.from('pe_galleries').select('id').limit(1).single();
+                
+                if (!g) { status.innerText = "No gallery found."; return; }
 
-                if (error) throw error;
+                // 2. Get photos for that gallery
+                const { data: photos } = await sb.from('pe_photos').select('*').eq('gallery_id', g.id);
 
-                if (galleries && galleries.length > 0) {
-                    btn.href = `gallery.html?id=${galleries[0].id}`;
-                    btn.style.display = 'inline-block';
+                if (photos && photos.length > 0) {
                     status.style.display = 'none';
+                    const wm = Array(9).fill('<div class="wm-unit">KLICKPIX</div>').join('');
+                    grid.innerHTML = photos.map(p => `
+                        <div class="photo-card">
+                            <div class="wm-overlay">${wm}</div>
+                            <img src="${p.preview_url}">
+                            <button class="btn-buy" onclick="location.href='checkout.html'">BUY FOR $20</button>
+                        </div>
+                    `).join('');
                 } else {
-                    status.innerText = "Gallery 'Bring a Friend' not found in Supabase.";
+                    status.innerText = "No photos in the vault yet.";
                 }
             } catch (e) {
-                status.innerHTML = "Connection Error.<br><small style='color:#e11d48'>" + e.message + "</small>";
+                status.innerText = "Connection failed: " + e.message;
             }
         });
     </script>
