@@ -1,4 +1,4 @@
-/* KLICKPIX MASTER CONFIG - V24.0 */
+/* KLICKPIX MASTER CONFIG - V27.0 */
 (function() {
     "use strict";
     const CONFIG = {
@@ -7,11 +7,9 @@
         SUPABASE_BUCKET: "photos",
         PAYPAL_CLIENT_ID: "Ad_2vFmXz5S0vHw2mQ9E_B3sQv6lY_p7-R3U8zX_G_W_C1_D", 
         CURRENCY_CODE: "NZD",
-        CURRENCY_SYMBOL: "NZ$",
         PRICE_PER_PHOTO: 20.00
     };
     window.KLICKPIX_CONFIG = CONFIG;
     window.SUPABASE_URL = CONFIG.SUPABASE_URL;
     window.SUPABASE_ANON_KEY = CONFIG.SUPABASE_ANON_KEY;
-    console.log("KlickPix V24: Security & System Fully Integrated");
 })();

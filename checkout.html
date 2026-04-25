@@ -3,52 +3,74 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>KlickPix | Checkout</title>
-    <link rel="stylesheet" href="style.css?v=24.0">
-    <script src="data.js?v=24.0"></script>
+    <title>Checkout | KlickPix</title>
+    <script src="data.js?v=40.0"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://www.paypal.com/sdk/js?client-id=Ad_2vFmXz5S0vHw2mQ9E_B3sQv6lY_p7-R3U8zX_G_W_C1_D&currency=NZD"></script>
+    <style>
+        body { background: #0f172a; color: white; font-family: 'Syne', sans-serif; padding: 40px 20px; text-align: center; }
+        .box { background: #1e293b; padding: 30px; border-radius: 12px; border: 1px solid #334155; max-width: 450px; margin: 0 auto; }
+        .total-row { display: flex; justify-content: space-between; margin-top: 20px; padding: 20px 0; border-top: 2px solid #22c55e; font-size: 2rem; font-weight: 800; color: #22c55e; }
+        #paypal-button-container { margin-top: 20px; min-height: 150px; }
+    </style>
 </head>
-<body style="background: #0f172a; color: white; font-family: 'Syne', sans-serif; padding: 40px 20px;">
-    <div style="max-width: 600px; margin: 0 auto;">
-        <a href="index.html" style="text-decoration:none; color:white; font-weight:800; font-size:1.5rem;">Klick<span style="color:#e11d48;">Pix</span></a>
-        <h1 style="letter-spacing:-2px; margin-top:20px;">Review Order</h1>
-        <div id="cart-list" style="background:#1e293b; padding:20px; border-radius:12px; margin-bottom:20px; border:1px solid #334155;"></div>
-        <div style="font-size: 2rem; font-weight: 800; display: flex; justify-content: space-between; margin-bottom: 30px; color: #22c55e;">
-            <span>Total</span><span id="total-price">$0.00</span>
+<body>
+
+    <div class="box">
+        <h2 style="letter-spacing:-1px;">Order Summary</h2>
+        <div id="cart-summary" style="margin-bottom:20px; color:#94a3b8; font-weight:600;"></div>
+        
+        <div class="total-row">
+            <span>Total</span>
+            <span id="final-price">$0.00</span>
         </div>
+
         <div id="paypal-button-container"></div>
+        <p id="fallback-msg" style="display:none; color:#e11d48; margin-top:20px;">PayPal is currently blocked. Please disable AdBlockers or try a different browser.</p>
     </div>
 
     <script>
-        const sb = supabase.createClient(window.KLICKPIX_CONFIG.SUPABASE_URL, window.KLICKPIX_CONFIG.SUPABASE_ANON_KEY);
-        let cart = JSON.parse(localStorage.getItem('kp_cart')) || [];
+        (function() {
+            window.addEventListener('load', async () => {
+                const conf = window.KLICKPIX_CONFIG;
+                const sb = supabase.createClient(conf.SUPABASE_URL, conf.SUPABASE_ANON_KEY);
+                let cart = JSON.parse(localStorage.getItem('kp_cart')) || [];
 
-        async function init() {
-            if(cart.length === 0) { window.location.href = 'index.html'; return; }
-            const { data: photos } = await sb.from('pe_photos').select('*').in('id', cart);
-            document.getElementById('cart-list').innerHTML = photos.map(p => `
-                <div style="display:flex; justify-content:space-between; padding:10px 0; border-bottom:1px solid #334155;">
-                    <span>Photo ID: ${p.id.slice(0,5)}</span>
-                    <span>$${window.KLICKPIX_CONFIG.PRICE_PER_PHOTO.toFixed(2)}</span>
-                </div>`).join('');
-            const total = (photos.length * window.KLICKPIX_CONFIG.PRICE_PER_PHOTO).toFixed(2);
-            document.getElementById('total-price').innerText = `$${total}`;
+                if (cart.length === 0) {
+                    document.getElementById('cart-summary').innerText = "Empty cart.";
+                    return;
+                }
 
-            const script = document.createElement('script');
-            script.src = `https://www.paypal.com/sdk/js?client-id=${window.KLICKPIX_CONFIG.PAYPAL_CLIENT_ID}&currency=${window.KLICKPIX_CONFIG.CURRENCY_CODE}`;
-            script.onload = () => {
+                const { data: photos } = await sb.from('pe_photos').select('*').in('id', cart);
+                if (!photos) return;
+
+                const total = (photos.length * 20).toFixed(2);
+                document.getElementById('cart-summary').innerText = `${photos.length} Photos Selected`;
+                document.getElementById('final-price').innerText = `$${total}`;
+
+                // CHECK IF PAYPAL LOADED
+                if (typeof paypal === 'undefined') {
+                    document.getElementById('fallback-msg').style.display = 'block';
+                    return;
+                }
+
                 paypal.Buttons({
-                    createOrder: (data, actions) => actions.order.create({ purchase_units: [{ amount: { value: total } }] }),
-                    onApprove: (data, actions) => actions.order.capture().then(() => {
-                        sessionStorage.setItem('kp_last_purchase', JSON.stringify(cart));
-                        localStorage.removeItem('kp_cart');
-                        window.location.href = 'success.html';
-                    })
+                    style: { layout: 'vertical', color: 'gold', shape: 'rect', label: 'pay' },
+                    createOrder: (data, actions) => {
+                        return actions.order.create({
+                            purchase_units: [{ amount: { value: total } }]
+                        });
+                    },
+                    onApprove: (data, actions) => {
+                        return actions.order.capture().then(() => {
+                            sessionStorage.setItem('kp_last_purchase', JSON.stringify(cart));
+                            localStorage.removeItem('kp_cart');
+                            window.location.href = 'success.html';
+                        });
+                    }
                 }).render('#paypal-button-container');
-            };
-            document.head.appendChild(script);
-        }
-        init();
+            });
+        })();
     </script>
 </body>
 </html>
