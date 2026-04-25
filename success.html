@@ -4,27 +4,28 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Success | KlickPix</title>
-    <link rel="stylesheet" href="style.css?v=22.0">
-    <script src="data.js?v=22.0"></script>
+    <link rel="stylesheet" href="style.css?v=23.0">
+    <script src="data.js?v=23.0"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body style="background: #0f172a; color: white; font-family: 'Syne', sans-serif; padding: 40px; text-align: center;">
     <h1>Thank You!</h1>
     <p>Your instant downloads are ready below:</p>
     <div id="download-list" style="margin-top:40px; max-width: 600px; margin-left: auto; margin-right: auto;"></div>
+    <a href="index.html" style="color:#64748b; text-decoration:none; margin-top:40px; display:inline-block;">Back to Home</a>
 
     <script>
         const sb = supabase.createClient(window.KLICKPIX_CONFIG.SUPABASE_URL, window.KLICKPIX_CONFIG.SUPABASE_ANON_KEY);
         async function init() {
             const ids = JSON.parse(sessionStorage.getItem('kp_last_purchase')) || [];
+            if (ids.length === 0) return;
             const { data: photos } = await sb.from('pe_photos').select('*').in('id', ids);
             if(photos) {
                 document.getElementById('download-list').innerHTML = photos.map(p => `
                     <div style="background:#1e293b; padding:20px; border-radius:12px; margin-bottom:15px; display:flex; align-items:center; justify-content:space-between; border:1px solid #334155;">
                         <img src="${p.preview_url}" width="60" style="border-radius:4px;">
-                        <a href="${p.high_res_url}" download style="background:#22c55e; color:white; padding:10px 20px; border-radius:6px; font-weight:800; text-decoration:none;">DOWNLOAD</a>
-                    </div>
-                `).join('');
+                        <a href="${p.high_res_url}" download style="background:#22c55e; color:white; padding:10px 20px; border-radius:6px; font-weight:800; text-decoration:none;">DOWNLOAD HI-RES</a>
+                    </div>`).join('');
             }
         }
         init();
