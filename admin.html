@@ -1,4 +1,5 @@
-Set-Content admin.html '<!DOCTYPE html>
+$adminCode = @'
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -9,66 +10,69 @@ Set-Content admin.html '<!DOCTYPE html>
         body { background: #0f172a; color: white; font-family: sans-serif; padding: 40px; }
         .logo { font-size: 2.5rem; font-weight: 900; margin-bottom: 30px; }
         .logo span { color: #e11d48; }
-        .section { background: #1e293b; padding: 30px; border-radius: 12px; border: 1px solid #334155; margin-bottom: 30px; }
+        .box { background: #1e293b; padding: 30px; border-radius: 12px; border: 1px solid #334155; margin-bottom: 30px; }
         .btn { background: #e11d48; color: white; border: none; padding: 12px 24px; border-radius: 6px; cursor: pointer; font-weight: bold; }
-        .gallery-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 20px; }
-        .gallery-card { background: #0f172a; padding: 20px; border-radius: 12px; border: 1px solid #334155; text-align: center; }
+        .grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 20px; }
+        .card { background: #0f172a; padding: 20px; border-radius: 12px; border: 1px solid #334155; text-align: center; }
         input { padding: 12px; border-radius: 6px; background: #0f172a; color: white; border: 1px solid #334155; width: 300px; }
     </style>
 </head>
 <body>
     <div class="logo">Klick<span>Pix</span> Admin</div>
-    <div class="section">
+    <div class="box">
         <h3>1. Create Gallery</h3>
-        <input type="text" id="gTitle" placeholder="Gallery Title">
+        <input type="text" id="gT" placeholder="Gallery Title">
         <button onclick="addG()" class="btn">Create</button>
     </div>
-    <div class="section" id="upZone" style="opacity:0.4; pointer-events:none;">
-        <h3>2. Upload to: <span id="actName" style="color:#e11d48">None</span></h3>
-        <input type="file" id="fIn" multiple accept="image/*">
-        <button onclick="up()" class="btn" style="background:#22c55e">Upload</button>
-        <p id="stat"></p>
+    <div class="box" id="upZ" style="opacity:0.4; pointer-events:none;">
+        <h3>2. Upload to: <span id="actN" style="color:#e11d48">None</span></h3>
+        <input type="file" id="fI" multiple accept="image/*">
+        <button onclick="up()" class="btn" style="background:#22c55e">Start Upload</button>
+        <p id="st"></p>
     </div>
-    <h2>Galleries (5-Wide)</h2>
-    <div id="gList" class="gallery-grid"></div>
+    <h2>Your Galleries (5-Wide)</h2>
+    <div id="gL" class="grid"></div>
     <script>
         const conf = window.KLICKPIX_CONFIG;
         const sb = supabase.createClient(conf.SUPABASE_URL, conf.SUPABASE_ANON_KEY);
-        let selId = null;
+        let sId = null;
         async function ref() {
             const { data } = await sb.from("pe_galleries").select("*").order("created_at", {ascending: false});
-            document.getElementById("gList").innerHTML = data.map(g => `
-                <div class="gallery-card">
+            document.getElementById("gL").innerHTML = data.map(g => `
+                <div class="card">
                     <h4>${g.title}</h4>
-                    <button onclick="setG(\'${g.id}\', \'${g.title}\')" class="btn" style="width:100%">Select</button>
+                    <button onclick="setG('${g.id}', '${g.title}')" class="btn" style="width:100%">Select</button>
                 </div>`).join("");
         }
         async function addG() {
-            const t = document.getElementById("gTitle").value;
+            const t = document.getElementById("gT").value;
             if(!t) return;
-            await sb.from("pe_galleries").insert([{title:t}]);
-            document.getElementById("gTitle").value = "";
+            const { error } = await sb.from("pe_galleries").insert([{title:t}]);
+            if(error) alert(error.message);
+            document.getElementById("gT").value = "";
             ref();
         }
         function setG(id, t) {
-            selId = id;
-            document.getElementById("actName").innerText = t;
-            document.getElementById("upZone").style.opacity = "1";
-            document.getElementById("upZone").style.pointerEvents = "auto";
+            sId = id;
+            document.getElementById("actN").innerText = t;
+            document.getElementById("upZ").style.opacity = "1";
+            document.getElementById("upZ").style.pointerEvents = "auto";
         }
         async function up() {
-            const files = document.getElementById("fIn").files;
+            const files = document.getElementById("fI").files;
             for(let f of files) {
-                document.getElementById("stat").innerText = "Uploading " + f.name;
-                const path = selId + "/" + Date.now() + "_" + f.name;
+                document.getElementById("st").innerText = "Uploading " + f.name;
+                const path = sId + "/" + Date.now() + "_" + f.name;
                 await sb.storage.from("gallery-photos").upload(path, f);
                 const url = sb.storage.from("gallery-photos").getPublicUrl(path).data.publicUrl;
-                await sb.from("pe_photos").insert([{gallery_id:selId, full_url:url, preview_url:url}]);
+                await sb.from("pe_photos").insert([{gallery_id:sId, full_url:url, preview_url:url, price:conf.BASE_PRICE}]);
             }
-            document.getElementById("stat").innerText = "Done.";
+            document.getElementById("st").innerText = "All Complete.";
             ref();
         }
         ref();
     </script>
 </body>
-</html>'
+</html>
+'@
+$adminCode | Out-File -FilePath admin.html -Encoding utf8
