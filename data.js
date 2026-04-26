@@ -4,4 +4,3 @@ Set-Content data.js 'window.KLICKPIX_CONFIG = {
     PAYPAL_CLIENT_ID: "Ad_2vFmXz5S0vHw2mQ9E_B3sQv6lY_p7-R3U8zX_G_W_C1_D",
     BASE_PRICE: 7.00
 };'
-
