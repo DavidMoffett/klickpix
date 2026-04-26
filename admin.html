@@ -1,7 +1,0 @@
-// Inside your admin.html upload loop
-const { data, error } = await sb.from('pe_photos').insert([{
-    gallery_id: currentGalleryId,
-    preview_url: previewUrl,
-    full_res_url: fullUrl,
-    original_filename: file.name // CRITICAL: This grabs DSC_1234.jpg from your computer
-}]);
