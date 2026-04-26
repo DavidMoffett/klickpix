@@ -1,170 +1,74 @@
-<!DOCTYPE html>
+Set-Content admin.html '<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>KlickPix | ADMIN CONTROL</title>
+    <title>KlickPix | ADMIN</title>
     <script src="data.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
-        body { background: #0f172a; color: white; font-family: 'Segoe UI', sans-serif; margin: 0; padding: 40px; }
-        .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #e11d48; padding-bottom: 20px; margin-bottom: 40px; }
-        .btn { background: #e11d48; color: white; border: none; padding: 12px 24px; border-radius: 6px; cursor: pointer; font-weight: bold; text-decoration: none; display: inline-block; }
-        .btn-secondary { background: #334155; }
-        .btn-danger { background: #be123c; padding: 8px 12px; font-size: 0.8rem; }
-        
+        body { background: #0f172a; color: white; font-family: sans-serif; padding: 40px; }
+        .logo { font-size: 2.5rem; font-weight: 900; margin-bottom: 30px; }
+        .logo span { color: #e11d48; }
+        .section { background: #1e293b; padding: 30px; border-radius: 12px; border: 1px solid #334155; margin-bottom: 30px; }
+        .btn { background: #e11d48; color: white; border: none; padding: 12px 24px; border-radius: 6px; cursor: pointer; font-weight: bold; }
         .gallery-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 20px; }
-        .gallery-card { background: #1e293b; padding: 20px; border-radius: 12px; border: 1px solid #334155; text-align: center; }
-        
-        .upload-zone { background: #1e293b; padding: 30px; border-radius: 12px; margin-bottom: 40px; border: 2px dashed #e11d48; text-align: center; }
-        input[type="text"], select { padding: 12px; border-radius: 6px; border: 1px solid #334155; background: #0f172a; color: white; width: 300px; margin-bottom: 10px; }
-        #status { margin-top: 15px; font-weight: bold; color: #fb7185; white-space: pre-line; }
+        .gallery-card { background: #0f172a; padding: 20px; border-radius: 12px; border: 1px solid #334155; text-align: center; }
+        input { padding: 12px; border-radius: 6px; background: #0f172a; color: white; border: 1px solid #334155; width: 300px; }
     </style>
 </head>
 <body>
-
-    <div class="header">
-        <h1>Klick<span>Pix</span> Control Centre</h1>
-        <div>
-            <a href="index.html" class="btn btn-secondary">Public Site</a>
-            <button onclick="logout()" class="btn btn-secondary">Logout</button>
-        </div>
+    <div class="logo">Klick<span>Pix</span> Admin</div>
+    <div class="section">
+        <h3>1. Create Gallery</h3>
+        <input type="text" id="gTitle" placeholder="Gallery Title">
+        <button onclick="addG()" class="btn">Create</button>
     </div>
-
-    <div class="upload-zone">
-        <h3>Upload to Gallery</h3>
-        <select id="targetGallery"></select>
-        <br>
-        <input type="file" id="fileInput" multiple accept="image/*">
-        <button onclick="handleUploads()" class="btn">Start Upload</button>
-        <div id="status">Ready</div>
+    <div class="section" id="upZone" style="opacity:0.4; pointer-events:none;">
+        <h3>2. Upload to: <span id="actName" style="color:#e11d48">None</span></h3>
+        <input type="file" id="fIn" multiple accept="image/*">
+        <button onclick="up()" class="btn" style="background:#22c55e">Upload</button>
+        <p id="stat"></p>
     </div>
-
-    <div class="upload-zone" style="border-style: solid; border-width: 1px;">
-        <h3>Manage Galleries</h3>
-        <input type="text" id="newGalleryTitle" placeholder="New Gallery Title">
-        <button onclick="createGallery()" class="btn">Create Gallery</button>
-    </div>
-
-    <div id="galleryList" class="gallery-grid"></div>
-
+    <h2>Galleries (5-Wide)</h2>
+    <div id="gList" class="gallery-grid"></div>
     <script>
         const conf = window.KLICKPIX_CONFIG;
         const sb = supabase.createClient(conf.SUPABASE_URL, conf.SUPABASE_ANON_KEY);
-        const BUCKET = 'gallery-photos'; // UPDATED TO YOUR NEW BUCKET NAME
-
-        async function init() {
-            const { data: galleries } = await sb.from('pe_galleries').select('*').order('created_at', { ascending: false });
-            if (!galleries) return;
-
-            const select = document.getElementById('targetGallery');
-            select.innerHTML = galleries.map(g => `<option value="${g.id}">${g.title}</option>`).join('');
-            
-            const list = document.getElementById('galleryList');
-            list.innerHTML = galleries.map(g => `
+        let selId = null;
+        async function ref() {
+            const { data } = await sb.from("pe_galleries").select("*").order("created_at", {ascending: false});
+            document.getElementById("gList").innerHTML = data.map(g => `
                 <div class="gallery-card">
                     <h4>${g.title}</h4>
-                    <button onclick="deleteGallery('${g.id}')" class="btn btn-danger">Nuke Gallery</button>
-                </div>
-            `).join('');
+                    <button onclick="setG(\'${g.id}\', \'${g.title}\')" class="btn" style="width:100%">Select</button>
+                </div>`).join("");
         }
-
-        async function handleUploads() {
-            const files = document.getElementById('fileInput').files;
-            const galleryId = document.getElementById('targetGallery').value;
-            const statusDiv = document.getElementById('status');
-            if (!files.length) return alert("Select files first.");
-
-            for (let file of files) {
-                statusDiv.innerText = `Processing: ${file.name}`;
-                const fileName = `${Date.now()}-${file.name.replace(/\s+/g, '_')}`;
-
-                try {
-                    // 1. Upload High-Res (The Vault)
-                    const { error: highResError } = await sb.storage.from(BUCKET).upload(`vault/${fileName}`, file);
-                    if (highResError) throw highResError;
-                    const highResUrl = sb.storage.from(BUCKET).getPublicUrl(`vault/${fileName}`).data.publicUrl;
-
-                    // 2. Create and Upload Watermarked Preview (The Showroom)
-                    const previewBlob = await createPreview(file);
-                    const { error: previewError } = await sb.storage.from(BUCKET).upload(`previews/${fileName}`, previewBlob);
-                    if (previewError) throw previewError;
-                    const previewUrl = sb.storage.from(BUCKET).getPublicUrl(`previews/${fileName}`).data.publicUrl;
-
-                    // 3. Link everything in the database
-                    await sb.from('pe_photos').insert([{
-                        gallery_id: galleryId,
-                        full_url: highResUrl,
-                        preview_url: previewUrl,
-                        price: conf.BASE_PRICE
-                    }]);
-
-                    statusDiv.innerText += `\nSuccess: ${file.name}`;
-                } catch (err) {
-                    statusDiv.innerText += `\nError uploading ${file.name}: ${err.message}`;
-                }
+        async function addG() {
+            const t = document.getElementById("gTitle").value;
+            if(!t) return;
+            await sb.from("pe_galleries").insert([{title:t}]);
+            document.getElementById("gTitle").value = "";
+            ref();
+        }
+        function setG(id, t) {
+            selId = id;
+            document.getElementById("actName").innerText = t;
+            document.getElementById("upZone").style.opacity = "1";
+            document.getElementById("upZone").style.pointerEvents = "auto";
+        }
+        async function up() {
+            const files = document.getElementById("fIn").files;
+            for(let f of files) {
+                document.getElementById("stat").innerText = "Uploading " + f.name;
+                const path = selId + "/" + Date.now() + "_" + f.name;
+                await sb.storage.from("gallery-photos").upload(path, f);
+                const url = sb.storage.from("gallery-photos").getPublicUrl(path).data.publicUrl;
+                await sb.from("pe_photos").insert([{gallery_id:selId, full_url:url, preview_url:url}]);
             }
-            statusDiv.innerText = "All tasks complete.";
-            document.getElementById('fileInput').value = '';
+            document.getElementById("stat").innerText = "Done.";
+            ref();
         }
-
-        function createPreview(file) {
-            return new Promise((resolve) => {
-                const img = new Image();
-                img.src = URL.createObjectURL(file);
-                img.onload = () => {
-                    const canvas = document.createElement('canvas');
-                    const ctx = canvas.getContext('2d');
-                    const maxDim = 1200;
-                    let width = img.width;
-                    let height = img.height;
-
-                    if (width > height && width > maxDim) { height *= maxDim / width; width = maxDim; }
-                    else if (height > maxDim) { width *= maxDim / height; height = maxDim; }
-
-                    canvas.width = width;
-                    canvas.height = height;
-                    ctx.drawImage(img, 0, 0, width, height);
-
-                    // Apply TITS Watermark logic - Simple and unmissable
-                    ctx.save();
-                    ctx.translate(width / 2, height / 2);
-                    ctx.rotate(-Math.PI / 4);
-                    ctx.font = "bold 80px sans-serif";
-                    ctx.fillStyle = "rgba(255, 255, 255, 0.25)";
-                    ctx.textAlign = "center";
-                    
-                    for (let x = -width; x < width; x += 400) {
-                        for (let y = -height; y < height; y += 300) {
-                            ctx.fillText("KLICKPIX", x, y);
-                        }
-                    }
-                    ctx.restore();
-                    canvas.toBlob(resolve, 'image/jpeg', 0.85);
-                };
-            });
-        }
-
-        async function createGallery() {
-            const title = document.getElementById('newGalleryTitle').value;
-            if (!title) return;
-            await sb.from('pe_galleries').insert([{ title }]);
-            location.reload();
-        }
-
-        async function deleteGallery(id) {
-            if (confirm("Nuke this gallery?")) {
-                await sb.from('pe_galleries').delete().eq('id', id);
-                location.reload();
-            }
-        }
-
-        function logout() { localStorage.removeItem('kp_admin'); location.reload(); }
-
-        if (localStorage.getItem('kp_admin') !== 'active') {
-            const pass = prompt("Admin Key:");
-            if (pass === 'david123') { localStorage.setItem('kp_admin', 'active'); init(); }
-            else { document.body.innerHTML = "Unauthorized"; }
-        } else { init(); }
+        ref();
     </script>
 </body>
-</html>
+</html>'
